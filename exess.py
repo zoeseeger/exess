@@ -11,7 +11,7 @@ import tqdm
 import numpy as np
 import pandas as pd
 sys.path.append("/Users/zoes/apps/qcp-python-app/qcp")
-# sys.path.append("/g/data/k96/apps/qcp/qcp")
+sys.path.append("/g/data/k96/apps/qcp/qcp")
 
 ### GENERAL FUNCTIONS --------------------------------------------
 
@@ -459,15 +459,13 @@ def exess_mbe_template(frag_ids, frag_charges, symbols, geometry, method="RIMP2"
     ncheck = number_checkpoints + 1
     ncheck = int((mons+ncheck)/ncheck)
 
-    # METHOD
-    method = "MBE-" + method
-
     dict_ = {
         "driver"    : "energy",
         "model"     : {
-            "method": method,
-            "basis"     : basis,
-            "aux_basis" : auxbasis,
+            "method"        : method,
+            "basis"         : basis,
+            "aux_basis"     : auxbasis,
+            "fragmentation" : True
         },
         "keywords"  : {
             "scf"           : {
@@ -477,8 +475,19 @@ def exess_mbe_template(frag_ids, frag_charges, symbols, geometry, method="RIMP2"
                 "rmsd"              : 1E-8,
                 "debug"             : False,
             },
-            "mbe"       : {
-                "ngpus_per_group"   : 4,
+            "frag": {
+                "method"                : "MBE",
+                "ngpus_per_group"       : 4,
+                "lattice_energy_calc"   : True,
+                "reference_monomer"     : 0,
+                "dimer_cutoff"          : 1000,
+                "dimer_mp2_cutoff"      : 20,
+                "run_trimers"           : True,
+                "trimer_cutoff"         : 40,
+                "trimer_mp2_cutoff"     : 20,
+                "run_tetramers"         : True,
+                "tetramer_cutoff"       : 25,
+                "tetramer_mp2_cutoff"   : 10
             },
             "check_rst": {
                 "checkpoint": True,
@@ -1552,7 +1561,7 @@ def run(value, filename):
     elif value == "5":
 
         mbe = input("MBE [y]: ")
-        meth = input("Method [RHF]: ")
+        meth = input("Method [RIMP2]: ")
 
         if mbe == "n" or mbe == "N":
             mbe = False
@@ -1560,7 +1569,7 @@ def run(value, filename):
             mbe = True
 
         if meth == "":
-            meth = "RHF"
+            meth = "RIMP2"
 
         if not filename:
             filename = glob.glob("*xyz")[0]
