@@ -445,7 +445,7 @@ def json_to_frags(json_data):
     return fragList, atmList, totChrg, totMult, mbe
 
 
-def exess_mbe_template(frag_ids, frag_charges, symbols, geometry, method="RIMP2", nfrag_stop=None, basis="cc-pVDZ", auxbasis="cc-pVDZ-RIFIT", number_checkpoints=3):
+def exess_mbe_template(frag_ids, frag_charges, symbols, geometry, method="RIMP2", nfrag_stop=None, basis="cc-pVDZ", auxbasis="cc-pVDZ-RIFIT", number_checkpoints=3, ref_mon=0):
     """Json many body energy exess template."""
 
     # FRAGS
@@ -477,15 +477,14 @@ def exess_mbe_template(frag_ids, frag_charges, symbols, geometry, method="RIMP2"
             },
             "frag": {
                 "method"                : "MBE",
+                "level"                 : "4",
                 "ngpus_per_group"       : 4,
                 "lattice_energy_calc"   : True,
-                "reference_monomer"     : 0,
+                "reference_monomer"     : ref_mon,
                 "dimer_cutoff"          : 1000,
                 "dimer_mp2_cutoff"      : 20,
-                "run_trimers"           : True,
                 "trimer_cutoff"         : 40,
                 "trimer_mp2_cutoff"     : 20,
-                "run_tetramers"         : True,
                 "tetramer_cutoff"       : 25,
                 "tetramer_mp2_cutoff"   : 10
             },
@@ -605,7 +604,7 @@ def format_json_input_file(dict_):
     return newlines
 
 
-def make_exess_input_from_frag_ids(frag_indexs, fragList, atmList, method="RIMP2", nfrag_stop=None, basis="cc-pVDZ", auxbasis="cc-pVDZ-RIFIT", number_checkpoints=3, mbe=False):
+def make_exess_input_from_frag_ids(frag_indexs, fragList, atmList, method="RIMP2", nfrag_stop=None, basis="cc-pVDZ", auxbasis="cc-pVDZ-RIFIT", number_checkpoints=3, mbe=False, ref_mon=0):
     """Make exess input from frag indexes and fraglist."""
     symbols      = []
     frag_ids     = []
@@ -625,7 +624,7 @@ def make_exess_input_from_frag_ids(frag_indexs, fragList, atmList, method="RIMP2
             xyz_lines.append(f"{atmList[id]['sym']} {atmList[id]['x']} {atmList[id]['y']} {atmList[id]['z']}\n")
     # TO JSON
     if mbe:
-        json_dict = exess_mbe_template(frag_ids, frag_charges, symbols, geometry, method, nfrag_stop, basis, auxbasis, number_checkpoints)
+        json_dict = exess_mbe_template(frag_ids, frag_charges, symbols, geometry, method, nfrag_stop, basis, auxbasis, number_checkpoints, ref_mon=ref_mon)
     else:
         json_dict = exess_template(symbols, geometry, method, basis, auxbasis)
     json_lines = format_json_input_file(json_dict)
@@ -1429,7 +1428,7 @@ def make_smaller_shell_from_json(json_, cutoff):
     print(f"Fragments within {cutoff}: {len(indexes)}")
 
     # NEW MBE
-    json_lines, lines = make_exess_input_from_frag_ids(indexes, fragList, atmList, number_checkpoints=0, mbe=mbe)
+    json_lines, lines = make_exess_input_from_frag_ids(indexes, fragList, atmList, number_checkpoints=0, mbe=mbe, ref_mon=0)
 
     # WRITE FILES
     write_file(json_.replace('.js', f'-{cutoff}.js'), json_lines)
