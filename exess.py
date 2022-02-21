@@ -10,9 +10,6 @@ import json
 import tqdm
 import numpy as np
 import pandas as pd
-#import matplotlib.style
-#import matplotlib as mpl
-#import matplotlib.pyplot as plt
 sys.path.append("/Users/zoes/apps/qcp-python-app/qcp")
 # sys.path.append("/g/data/k96/apps/qcp/qcp")
 
@@ -244,14 +241,6 @@ def distances_to_central_frag(fragList, atmList, center_ip_id, cutoff, mers="dim
 
     if mers == "dimers":
         for i in frags_cutoff:
-            # dist = 0
-            # for id in frag['ids']:
-                # DIST
-                # dist += distance(central['comx'], central['comy'], central['comz'],
-                #                  atmList[id]['x'], atmList[id]['y'], atmList[id]['z'])
-            # AVERAGE
-            # dist = dist / len(frag['ids'])
-
             dist = distance(central['comx'], central['comy'], central['comz'],
                             fragList[i]['comx'], fragList[i]['comy'], fragList[i]['comz'])
 
@@ -494,8 +483,6 @@ def exess_mbe_template(frag_ids, frag_charges, symbols, geometry, method="RIMP2"
             "check_rst": {
                 "checkpoint": True,
                 "restart": False,
-                #"nfrag_check": int((m+ncheck)/ncheck),
-                #"nfrag_stop": m # total number of frags
                 "nfrag_check": min(ncheck, total_frags),
                 "nfrag_stop": min(nfrag_stop, total_frags)
             }
@@ -806,7 +793,6 @@ def write_xxmers(fragList, atmList, center_ip_id, method="RIMP2", typ="dimers", 
             for j in range(i+1, len(frags_cutoff_central)):
                 for k in range(j+1, len(frags_cutoff_central)):
                     inputs = write_json([frags_cutoff_central[i], frags_cutoff_central[j], frags_cutoff_central[k], center_ip_id], True, fragList, atmList, typ, inputs, False)
-                    # print(keyName(frags_cutoff_central[i], frags_cutoff_central[j], frags_cutoff_central[k], center_ip_id))
 
         # TETRAMERS WITH ALL
         for i in tqdm.tqdm(range(len(frags_cutoff_all))):
@@ -836,68 +822,6 @@ def create_tar(path, name, files, delete):
         for f in files:
             line += f" {path}/{f}"
         os.system(line)
-
-
-### GRAPHS --------------------------------------------
-
-
-def plot_dist_v_acc_energy(df, savefile):
-    """Plot distance versus accumulated difference in energy."""
-
-    #https://towardsdatascience.com/styling-pandas-plots-and-charts-9b4721e9e597
-    mpl.style.use('ggplot')
-    mpl.rcParams['font.size'] = 12
-    mpl.rcParams['scatter.marker'] = '*'
-    ax = df.plot(x='dists', y=['acc_diff_tot', 'acc_diff_hf', 'acc_diff_srs'], style='.-', ms=8)
-    ax.set_xlabel("Distance, A")
-    ax.set_ylabel("Energy, kJ/mol")
-    ax.legend(["Total", "HF", "SRS corr"])
-    fig = ax.get_figure()
-    fig.savefig(savefile)
-
-
-def plot_dist_v_energy(df, savefile):
-    """Plot distance versus energy of single monomer/dimers."""
-
-    #https://towardsdatascience.com/styling-pandas-plots-and-charts-9b4721e9e597
-    try:
-        mpl.style.use('ggplot')
-        mpl.rcParams['font.size'] = 12
-        mpl.rcParams['scatter.marker'] = '*'
-        ax = df.plot(x='dists', y=['tot', 'hf', 'srs'], style='.-', ms=8)
-        ax.set_xlabel("Distance, A")
-        ax.set_ylabel("Energy, kJ/mol")
-        ax.legend(["Total", "HF", "SRS corr"])
-        fig = ax.get_figure()
-        fig.savefig(savefile)
-    except Exception as e:
-        print("ERROR PLOTTING:", e)
-
-
-def separated_plot(df):
-    mpl.style.use('ggplot')
-    mpl.rcParams['font.size'] = 12
-    mpl.rcParams['scatter.marker'] = '*'
-    fig, axes = plt.subplots(nrows=3, ncols=1)
-    ax1 = df.plot(x='dists', y='acc_diff_hf', style='.-', ms=8, ax=axes[0])
-    ax2 = df.plot(x='dists', y='acc_diff_srs', style='.-', ms=8, ax=axes[1])
-    ax3 = df.plot(x='dists', y='acc_diff_tot', style='.-', ms=8, ax=axes[2])
-    plt.xlabel('Distance, A')
-    ax2.set_ylabel('Energy, kJ/mol')
-    # ax.legend(["Total", "HF", "SRS corr"])
-    # fig = ax.get_figure()
-    fig.savefig("input-files.pdf")
-
-
-def single_plot(df, y_column, savefile):
-    mpl.style.use('ggplot')
-    mpl.rcParams['font.size'] = 12
-    mpl.rcParams['scatter.marker'] = '*'
-    ax = df.plot(x='dists', y=y_column, style='.-', ms=8)
-    ax.set_xlabel('Distance, A')
-    ax.set_ylabel('Energy, kJ/mol')
-    fig = ax.get_figure()
-    fig.savefig(savefile)
 
 
 ### ENERGIES --------------------------------------------
@@ -1054,14 +978,6 @@ def distance_energy_df(dimer_dists, center_ip_id, monomers, dimers, trimers=None
             srs_frag.append(srs)
             hf_frag.append(hf)
             type_frag.append(typ)
-            # tot_acc += tot
-            # mp2_acc += mp2
-            # srs_acc += srs
-            # hf_acc  += hf
-            # tot_acc_list.append(tot_acc)
-            # mp2_acc_list.append(mp2_acc)
-            # srs_acc_list.append(srs_acc)
-            # hf_acc_list.append(hf_acc)
 
         return tot_frag, mp2_frag, srs_frag, hf_frag, type_frag
 
@@ -1071,11 +987,6 @@ def distance_energy_df(dimer_dists, center_ip_id, monomers, dimers, trimers=None
     srs = monomer['os'] * os_coef * conversion
     tot = hf + srs
     tot_frag, mp2_frag, srs_frag, hf_frag, type_frag  = [tot], [mp2], [srs], [hf], ["monomer"]
-    # tot_acc = tot
-    # mp2_acc = mp2
-    # srs_acc = srs
-    # hf_acc  = hf
-    # tot_acc_list, mp2_acc_list, srs_acc_list, hf_acc_list = [tot_acc], [mp2_acc], [srs_acc], [hf_acc]
 
     # convert energies, merge with distances and add to lists
     tot_frag, mp2_frag, srs_frag, hf_frag, type_frag = energy_list(dimer_dists, dimers, tot_frag, mp2_frag, srs_frag, hf_frag, type_frag, typ="dimer")
@@ -1099,26 +1010,9 @@ def distance_energy_df(dimer_dists, center_ip_id, monomers, dimers, trimers=None
         'r5'   : r5,
         'r6'   : r6,
         'rmax' : rmax,
-        # 'acc_tot': tot_acc_list,
-        # 'acc_hf': hf_acc_list,
-        # 'acc_mp2': mp2_acc_list,
-        # 'acc_srs': srs_acc_list,
-        # 'acc_diff_tot': [x - tot_acc for x in tot_acc_list],
-        # 'acc_diff_hf' : [x - hf_acc for x in hf_acc_list],
-        # 'acc_diff_srs': [x - srs_acc for x in srs_acc_list],
-        # 'acc_diff_mp2': [x - mp2_acc for x in mp2_acc_list],
     }
-    # JUST DIMERS
-    # dimer_data = {
-    #     'dists': dists_list[1:],
-    #     'ids'  : ids_list[1:],
-    #     'tot'  : tot_frag[1:],
-    #     'hf'   : hf_frag[1:],
-    #     'mp2'  : mp2_frag[1:],
-    #     'srs'  : srs_frag[1:],
-    # }
 
-    return data#, dimer_data, tot_acc, hf_acc, mp2_acc, srs_acc
+    return data
 
 
 def energies_corr_from_log_when_calculated(filename):
@@ -1146,8 +1040,6 @@ def energies_corr_from_log_when_calculated(filename):
                 _, q_id, _, _, _, _, os, ss, _ = line.replace(',','').split()
                 fragments[q_id]['os'] = float(os)
                 fragments[q_id]['ss'] = float(ss)
-                # if float(os)*2625.5*1.752 > 2000:
-                #     print('os', os)
 
     return fragments
 
@@ -1261,24 +1153,15 @@ def trimer_contributions(trimers, dimers, monomers):
         dict_['hf'] = dict_['hf'] - \
             dimers[keyName(id1, id2)]['hf'] - dimers[keyName(id1, id3)]['hf'] - dimers[keyName(id2, id3)]['hf'] - \
             monomers[id1]['hf'] - monomers[id2]['hf'] - monomers[id3]['hf']
-        # if key == "0-2-3":
-            # print(1, "dict_['os']", dict_['os'])
-            # print(2, "dimers[keyName(id1, id2)]['os']", dimers[keyName(id1, id2)]['os'])
-            # print(3, "dimers[keyName(id1, id3)]['os']", dimers[keyName(id1, id3)]['os'])
-            # print(4, "dimers[keyName(id2, id3)]['os']", dimers[keyName(id2, id3)]['os'])
-            # print(5, "monomers[id1]['os']", monomers[id1]['os'])
-            # print(6, "monomers[id2]['os']", monomers[id2]['os'])
-            # print(7, "monomers[id3]['os']", monomers[id3]['os'])
+
         dict_['os'] = dict_['os'] - \
             dimers[keyName(id1, id2)]['os'] - dimers[keyName(id1, id3)]['os'] - dimers[keyName(id2, id3)]['os'] - \
             monomers[id1]['os'] - monomers[id2]['os'] - monomers[id3]['os']
-        # if key == "0-2-3":
-            # print(8, "dict_['os']", dict_['os'])
+
         dict_['ss'] = dict_['ss'] - \
             dimers[keyName(id1, id2)]['ss'] - dimers[keyName(id1, id3)]['ss'] - dimers[keyName(id2, id3)]['ss']- \
             monomers[id1]['ss'] - monomers[id2]['ss'] - monomers[id3]['ss']
-        # except KeyError:
-        #     dict_['os'], dict_['ss'] = np.nan, np.nan
+
     return trimers
 
 
@@ -1293,7 +1176,6 @@ def tetramer_contributions(tetramers, trimers, dimers, monomers):
             dimers[keyName(id1, id2)]['hf'] - dimers[keyName(id1, id3)]['hf'] - dimers[keyName(id1, id4)]['hf'] - \
             dimers[keyName(id2, id3)]['hf']- dimers[keyName(id2, id4)]['hf'] - dimers[keyName(id3, id4)]['hf'] - \
             monomers[id1]['hf'] - monomers[id2]['hf'] - monomers[id3]['hf'] - monomers[id4]['hf']
-        # try:
         dict_['os'] = dict_['os'] - \
             trimers[keyName(id1, id2, id3)]['os'] - trimers[keyName(id1, id2, id4)]['os'] - \
             trimers[keyName(id1, id3, id4)]['os'] - trimers[keyName(id2, id3, id4)]['os'] - \
@@ -1306,8 +1188,6 @@ def tetramer_contributions(tetramers, trimers, dimers, monomers):
             dimers[keyName(id1, id2)]['ss'] - dimers[keyName(id1, id3)]['ss'] - dimers[keyName(id1, id4)]['ss'] - \
             dimers[keyName(id2, id3)]['ss']- dimers[keyName(id2, id4)]['ss'] - dimers[keyName(id3, id4)]['ss'] - \
             monomers[id1]['ss'] - monomers[id2]['ss'] - monomers[id3]['ss'] - monomers[id4]['ss']
-        # except KeyError: # IF NOT ENTERED INTO DICT
-        #     dict_['os'], dict_['ss'] = np.nan, np.nan
 
     return tetramers
 
@@ -1358,7 +1238,6 @@ def distance_central_com_of_dimer(fragList, atmList, center_ip_id, cutoff):
 
 
 ### TOP LEVEL --------------------------------------------------------
-
 
 def make_dimer_trimer_tetramer_calcs(jsonfile, method="RIMP2", num_json_dimers=50, num_json_trimers=30, num_json_tetramers=10, dimers=True, trimers=True, tetramers=True, debug=False, cutoff_dims=None, cutoff_trims=None, cutoff_tets=None):
     """Make dimer job files for each dimer with the central fragment."""
@@ -1460,20 +1339,9 @@ def df_from_logs(
         monomers, dimers = energies_dumped_hf(hf_dump_file, fragments) # hf from h5dump
     elif get_energies == "manual":
         name = "output"
-        # print("check dimer logs")
-        # check_all_completed(glob.glob("dimers/*log"))
-        # print("check trimer logs")
-        # check_all_completed(glob.glob("trimers/*log"))
-        # print("check tetramer logs")
-        # check_all_completed(glob.glob("tetramers/*log"))
+
         # print("done")
         monomers, dimers = energies_from_sep_mbe_dimers(glob.glob("dimers/*log"), center_ip_id)
-        # print("monomers")
-        # for i, j in monomers.items():
-        #     print(i, j)
-        # print("dimers")
-        # for i, j in dimers.items():
-        #     print(i, j)
 
         # get higher level energies
         if os.path.isdir("trimers"):
@@ -1488,7 +1356,6 @@ def df_from_logs(
             trimers = remove_additional_mers(trimers)
     p.print_("name", name)
     p.print_(f"monomers['{center_ip_id}']", monomers[str(center_ip_id)])
-    # p.print_(f"dimers['{center_ip_id}-1']", dimers[keyName(center_ip_id, 1)])
 
     # DISTANCE FROM EACH FRAG TO CENTRAL IP
     dimers_dists = distances_to_central_frag(fragList, atmList, center_ip_id, cutoff_dims, mers="dimers")
@@ -1502,80 +1369,6 @@ def df_from_logs(
     p.print_("df_data.keys()", df_data.keys())
     p.print_("df_data", df_data, still_print=False)
     df.to_csv("df.csv", index=False)
-    # pd.set_option('display.max_rows', None)
-    # pd.set_option('display.max_columns', None)
-    # pd.set_option('display.width', None)
-    # pd.set_option('display.max_colwidth', None)
-    # print(df.head())
-    # print(dimer_df.head())
-
-    # PRINT ENERGIES
-    # if print_energies:
-    #     print()
-    #     # print("tot hf mp2_cor srs_cor")
-    #     # print(total, hf, mp2_cor, srs_cor)
-    #     os_h  = srs_cor / 1.752 / 2625.4996
-    #     ss_h  = mp2_cor / 2625.4996 - os_h
-    #     tot_h = total/2625.4996
-    #     print(tot_h, os_h, ss_h)
-    #     print(total, mp2_cor, srs_cor)
-    #
-    # # PLOT ENERGIES
-    # if plot_graphs:
-    #     e = graph_energy_cutoff
-    #     d = 30
-    #     plot_dist_v_acc_energy(df, f"{name}-acc.pdf")
-    #     plot_dist_v_acc_energy(df[(df['acc_diff_hf'] < e) & (df['acc_diff_hf'] > -e)], f"{name}-acc-{e}kj.pdf")
-    #     plot_dist_v_energy(dimer_df, f"{name}-e.pdf")
-    #     plot_dist_v_energy(dimer_df[dimer_df['dists'] > d], f"{name}-e-{d}.pdf")
-    #     # plot_dist_v_energy(df[(df['acc_diff_hf'] < e) & (df['acc_diff_hf'] > -e)], f"{name}-e-{e}kj.pdf")
-    #     single_plot(df, 'acc_diff_hf', f"{name}-acc_diff_hf.pdf")
-    #     single_plot(df[df['dists'] > d], 'acc_diff_hf', f"{name}-acc_diff_hf-{d}.pdf")
-    #     single_plot(dimer_df, 'hf', f"{name}-hf.pdf")
-    #     single_plot(dimer_df[dimer_df['dists'] > d], 'hf', f"{name}-hf-{d}.pdf")
-
-
-def make_central_ip(jsonfile, debug=False):
-    """Make central ion pair from the central anion and cation."""
-
-    p = Pprint(to_print=debug)
-
-    p.print_("name", jsonfile)
-
-    # READ JSON
-    json_data = read_json(jsonfile)
-
-    # CONVERT JSON TO FRAG DATA
-    fragList, atmList, totChrg, totMult, mbe = json_to_frags(json_data)
-
-    # ADD CENTER OF MASS (COM) - USED FOR CENTRAL IP
-    fragList = add_center_of_mass(fragList, atmList)
-
-    # GET MIDPOINT OF ALL COORDS
-    mx, my, mz = coords_midpoint(atmList)
-    p.print_("midpoint", (mx, my, mz))
-
-    # GET CENTRAL ANION AND CENTRAL CATION
-    center_cat = central_frag_with_charge(fragList, atmList, mx, my, mz, 1)
-    center_an = central_frag_with_charge(fragList, atmList, mx, my, mz, -1)
-    p.print_("center_cat", center_cat)
-    p.print_("center_an", center_an)
-
-    # ADD CENTRAL ANION AND CATION TOGETHER
-    fragList, center_frag = add_two_frags_together(fragList, atmList, center_cat, center_an)
-
-    # print(center_frag)
-    # print(fragList[center_frag])
-
-    # WRITE XYZS, COMS, MIDPOINT AND CENTRAL IP TO XYZ
-    if debug:
-        write_central_ip(fragList, atmList, center_frag)
-
-    # MAKE NEW JSON
-    json_lines, xyz_lines = make_exess_from_frag_ids(list(range(len(fragList))), fragList, atmList)
-    write_file(f"../input_files/c2mim-bf4-1159-single-ions-central-ip-logfiles/new-json-central-ip.json", json_lines)
-
-    # write_dimers(fragList, atmList, center_frag, 120)
 
 
 def make_job_from_jsons(num_json_per_job):
@@ -1757,7 +1550,6 @@ def run(value, filename):
 
     # xyz to json
     elif value == "5":
-        from system import systemData
 
         mbe = input("MBE [y]: ")
         meth = input("Method [RHF]: ")
@@ -1784,7 +1576,6 @@ def run(value, filename):
             filename = glob.glob("*json")[0]
 
         make_smaller_shell_from_json(filename, user_)
-
 
 
 # CALL SCRIPT -------------------------------------------
