@@ -1394,8 +1394,8 @@ def make_job_from_jsons(num_json_per_job):
     # chunk files
     files = list(chunk(fs, num_json_per_job))
     for val, input_list in enumerate(files):
-        create_tar("../json_sep_frag_calcs", val, input_list, True)
-        write_job_from_list("../json_sep_frag_calcs", val, input_list)
+        create_tar(".", val, input_list, True)
+        write_job_from_list(".", val, input_list)
 
 
 def make_smaller_shell_from_json(json_, cutoff):
