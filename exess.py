@@ -660,7 +660,7 @@ def write_central_ip(fragList, atmList, center_ip_id, mx, my, mz):
         else:
             lines.append(f"H {atm['x']} {atm['y']} {atm['z']}\n")
 
-    write_xyz("../json_sep_frag_calcs/central.xyz", lines)
+    write_xyz("central.xyz", lines)
 
 
 def write_file(filename, lines):
