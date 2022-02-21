@@ -1,4 +1,4 @@
-# Pre and post processing for Exess 
+# Pre and post processing for EXESS 
 Application for processing files for EXtreme-scale Electronic Structure System (EXESS) with a focus on lattice-energy type calculations using python.
 
 ## Python dependencies
