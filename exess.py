@@ -838,7 +838,7 @@ def create_tar(path, name, files, delete):
 def energies_from_mbe_log(filename):
     """Monomer dimer energies from log file."""
 
-    monomers, dimers = {}, {}
+    monomers, dimers, trimers, tetramers = {}, {}, {}, {}
     hf, os_, ss_ = True, False, False
     mons, dims, tris, tets = True, False, False, False
     energies = False
@@ -857,6 +857,7 @@ def energies_from_mbe_log(filename):
         return dict_
 
     dir, File = os.path.split(filename)
+    dir = dir or "."
     lines = eof(dir+'/', File, 0.15)
 
     for line in lines:
@@ -1112,7 +1113,7 @@ def energies_from_sep_mbe_dimers(logfiles, center_ip_id):
     for log in logfiles:
         typ, id1, id2 = log.split('/')[-1].split('.')[0].split('-')
         key = keyName(id1, id2)
-        mon, dim = energies_from_mbe_log(log)
+        mon, dim, _, _ = energies_from_mbe_log(log)
 
         if typ == "add" or id1 != str(center_ip_id):
             first  = mon['0']
@@ -1384,7 +1385,10 @@ def df_from_logs(
     dimers_dists = distances_to_central_frag(fragList, atmList, center_ip_id, cutoff_dims, mers="dimers")
     trimers_dists = distances_to_central_frag(fragList, atmList, center_ip_id, cutoff_trims, mers="trimers")
     tetramer_dists = distances_to_central_frag(fragList, atmList, center_ip_id, cutoff_tets, mers="tetramers")
-    p.print_("dimers_dists[0]", dimers_dists[0])
+    # p.print_("dimers_dists[0]", dimers_dists[0])
+    # print(dimers_dists)
+    # print(trimers_dists)
+    # print(tetramer_dists)
 
     # ENERGY PER DISTANCE - PANDAS
     df_data = distance_energy_df(dimers_dists, center_ip_id, monomers, dimers, trimers, tetramers, trimers_dists, tetramer_dists)
@@ -1475,7 +1479,8 @@ def run(value, filename):
     # dataframe from logs
     elif value == "1":
         jsn = glob.glob("*.json")[0]
-        log = None
+        log = glob.glob("*.log")[0]
+        # log = None
         df_from_logs(
             jsonfile=jsn,
             logfile=log,
