@@ -161,7 +161,7 @@ def periodicTable():
 
 
 def keyName(*args):
-    """Sort values in order and separate by hyphen."""
+    """Sort values in order and separate by hyphen - used as a unique key."""
 
     a = [int(i) for i in [*args]] # make sure all ints
     a = [str(i) for i in sorted(a)] # sort ints and then return strings
@@ -169,6 +169,11 @@ def keyName(*args):
 
 
 ### COORD MANIPULATION ------------------------------------------
+
+angstrom2bohr = 1.88973
+hartree2kjmol = 2625.4996
+osvdz2srs = 1.752
+osvtz2srs = 1.64
 
 
 def midpoint(list_):
@@ -484,12 +489,12 @@ def exess_mbe_template(frag_ids, frag_charges, symbols, geometry, method="RIMP2"
                 "ngpus_per_group"       : 4,
                 "lattice_energy_calc"   : True,
                 "reference_monomer"     : ref_mon,
-                "dimer_cutoff"          : 1000,
-                "dimer_mp2_cutoff"      : 20,
-                "trimer_cutoff"         : 40,
-                "trimer_mp2_cutoff"     : 20,
-                "tetramer_cutoff"       : 25,
-                "tetramer_mp2_cutoff"   : 10
+                "dimer_cutoff"          : 1000*angstrom2bohr,
+                "dimer_mp2_cutoff"      : 20*angstrom2bohr,
+                "trimer_cutoff"         : 40*angstrom2bohr,
+                "trimer_mp2_cutoff"     : 20*angstrom2bohr,
+                "tetramer_cutoff"       : 25*angstrom2bohr,
+                "tetramer_mp2_cutoff"   : 10*angstrom2bohr
             },
             "check_rst": {
                 "checkpoint": to_checkpoint,
@@ -953,11 +958,17 @@ def distance_energy_df(dimer_dists, center_ip_id, monomers, dimers, trimers=None
     """Energies as the radius is increased from the central frag."""
 
     if kjmol:
-        conversion = 2625.4996
+        conversion = hartree2kjmol
     else:
         conversion = 1
-    os_coef = 1.752
     monomer = monomers[str(center_ip_id)]
+
+    basis = "vdz"
+
+    if basis == 'vdz':
+        os_coef = osvdz2srs
+    elif basis == 'vtz':
+        os_coef = osvtz2srs
 
     # write monomer energies
     if False:
@@ -1127,7 +1138,11 @@ def energies_from_sep_mbe_dimers(logfiles, center_ip_id):
         if not monomers.get(id2) or np.isnan(monomers[id2].get('os')):
             monomers[id2] = second
 
-        dimers[key] = dim['0-1']
+        try:
+            dimers[key] = dim['0-1']
+        except Exception:
+            print(log)
+            print(Exception)
         dimers[key]['type'] = typ  # add or cntr
     return monomers, dimers
 
@@ -1478,15 +1493,20 @@ def run(value, filename):
 
     # dataframe from logs
     elif value == "1":
+
+        if os.path.isdir("dimers"):
+            log = None
+            get_energies = "manual"
+        else:
+            log = glob.glob("*.log")[0]
+            get_energies = "end"
+
         jsn = glob.glob("*.json")[0]
-        log = glob.glob("*.log")[0]
-        # log = None
         df_from_logs(
             jsonfile=jsn,
             logfile=log,
             hf_dump_file=None,
-            get_energies="end",
-            # get_energies="manual",
+            get_energies=get_energies,
             debug=True
         )
 
