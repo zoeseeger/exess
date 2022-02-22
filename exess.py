@@ -477,7 +477,7 @@ def exess_mbe_template(frag_ids, frag_charges, symbols, geometry, method="RIMP2"
             },
             "frag": {
                 "method"                : "MBE",
-                "level"                 : "4",
+                "level"                 : 4,
                 "ngpus_per_group"       : 4,
                 "lattice_energy_calc"   : True,
                 "reference_monomer"     : ref_mon,
