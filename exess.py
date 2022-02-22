@@ -840,8 +840,21 @@ def energies_from_mbe_log(filename):
 
     monomers, dimers = {}, {}
     hf, os_, ss_ = True, False, False
-    mons, dims = True, False
+    mons, dims, tris, tets = True, False, False, False
     energies = False
+
+    def storeEnergy(dict_, key, energy):
+        """Store energy in given dict depending on whether HF, OS or SS."""
+
+        energy = float(energy)
+        if hf:
+            dict_[key] = {'hf': energy, 'os': np.nan, 'ss': np.nan}
+        elif os_:
+            dict_[key]['os'] = energy
+        elif ss_:
+            dict_[key]['ss'] = energy
+
+        return dict_
 
     dir, File = os.path.split(filename)
     lines = eof(dir+'/', File, 0.15)
@@ -863,6 +876,14 @@ def energies_from_mbe_log(filename):
             dims = True
             mons = False
 
+        elif 'TRIMER ENERGY CORRECTION' in line:
+            dims = False
+            tris = True
+
+        elif 'TETRAMER ENERGY CORRECTION' in line:
+            tris = False
+            tets = True
+
         elif 'Summary of MBE RI-MP2 OS energies' in line:
             ss_ = False
             os_ = True
@@ -880,28 +901,24 @@ def energies_from_mbe_log(filename):
             if re.search('^[0-9]', line) or line.startswith('('):
                 if mons:
                     id, e = line.split()
-                    e = float(e)
-                    if hf:
-                        monomers[id] = {'hf': e, 'os': np.nan, 'ss': np.nan}
-                    elif os_:
-                        monomers[id]['os'] = e
-                    elif ss_:
-                        monomers[id]['ss'] = e
+                    monomers = storeEnergy(monomers, id, e)
 
                 elif dims:
                     id1, id2, e = line.split()
-                    e = float(e)
                     key = keyName(id1, id2)
-                    if hf:
-                        dimers[key] = {'hf': e, 'os': np.nan, 'ss': np.nan}
+                    dimers = storeEnergy(dimers, key, e)
 
-                    elif os_:
-                        dimers[key]['os'] = e
+                elif tris:
+                    id1, id2, id3, e = line.split()
+                    key = keyName(id1, id2, id3)
+                    trimers = storeEnergy(trimers, key, e)
 
-                    elif ss_:
-                        dimers[key]['ss'] = e
+                elif tets:
+                    id1, id2, id3, id4, e = line.split()
+                    key = keyName(id1, id2, id3, id4)
+                    tetramers = storeEnergy(tetramers, key, e)
 
-    return monomers, dimers
+    return monomers, dimers, trimers, tetramers
 
 
 def energies_from_log(filename):
@@ -1340,15 +1357,13 @@ def df_from_logs(
     tetramers = {}
     if get_energies == "end":
         name = logfile.split('.')
-        monomers, dimers = energies_from_mbe_log(logfile)
+        monomers, dimers, trimers, tetramers = energies_from_mbe_log(logfile)
     elif get_energies == "dump":
         name = logfile.split('.')
         fragments = energies_corr_from_log_when_calculated(logfile) # mp2 from start of files
-        monomers, dimers = energies_dumped_hf(hf_dump_file, fragments) # hf from h5dump
+        monomers, dimers, trimers, tetramers = energies_dumped_hf(hf_dump_file, fragments) # hf from h5dump
     elif get_energies == "manual":
         name = "output"
-
-        # print("done")
         monomers, dimers = energies_from_sep_mbe_dimers(glob.glob("dimers/*log"), center_ip_id)
 
         # get higher level energies
@@ -1457,8 +1472,71 @@ def run(value, filename):
     if value == "0" or value == "":
         pass
 
-    # make sep dimer/trimer/tetramer calcs
+    # dataframe from logs
     elif value == "1":
+        jsn = glob.glob("*.json")[0]
+        log = None
+        df_from_logs(
+            jsonfile=jsn,
+            logfile=log,
+            hf_dump_file=None,
+            get_energies="end",
+            # get_energies="manual",
+            debug=True
+        )
+
+    # json to xyz
+    elif value == "2":
+
+        if not filename:
+            filename = glob.glob("*json")[0]
+
+        # READ JSON
+        json_data = read_json(filename)
+
+        # CONVERT JSON TO FRAG DATA
+        _, atmList, _, _, _ = json_to_frags(json_data)
+
+        # WRITE XYZ
+        xyzfile = filename.replace(".json", ".xyz")
+        write_xyz(xyzfile, lines=[], atmList=atmList)
+
+    # xyz to json
+    elif value == "3":
+
+        mbe = input("MBE [y]: ")
+        meth = input("Method [RIMP2]: ")
+
+        if mbe == "n" or mbe == "N":
+            mbe = False
+        else:
+            mbe = True
+
+        if meth == "":
+            meth = "RIMP2"
+
+        if not filename:
+            filename = glob.glob("*xyz")[0]
+
+        xyz_to_json(filename, mbe, meth)
+
+    # make job from jsons
+    elif value == "4":
+        user_ = input("Number of xxmers per job: ")
+        make_job_from_jsons(int(user_))
+
+    # makes smaller shell from json
+    elif value == "5":
+
+        user_ = float(input("Cutoff distance of new shell: "))
+
+        if not filename:
+            filename = glob.glob("*json")[0]
+
+        make_smaller_shell_from_json(filename, user_)
+
+    # make sep dimer/trimer/tetramer calcs
+    elif value == "6":
 
         def t_or_f(value):
             if value == 't':
@@ -1523,78 +1601,16 @@ def run(value, filename):
             method=method
         )
 
-    # make job from jsons
-    elif value == "2":
-        user_ = input("Number of xxmers per job: ")
-        make_job_from_jsons(int(user_))
-
-    # dataframe from logs
-    elif value == "3":
-        jsn = glob.glob("*.json")[0]
-        log = None
-        df_from_logs(
-            jsonfile=jsn,
-            logfile=log,
-            hf_dump_file=None,
-            get_energies="manual",
-            debug=True
-        )
-
-    # json to xyz
-    elif value == "4":
-
-        if not filename:
-            filename = glob.glob("*json")[0]
-
-        # READ JSON
-        json_data = read_json(filename)
-
-        # CONVERT JSON TO FRAG DATA
-        _, atmList, _, _, _ = json_to_frags(json_data)
-
-        # WRITE XYZ
-        xyzfile = filename.replace(".json", ".xyz")
-        write_xyz(xyzfile, lines=[], atmList=atmList)
-
-    # xyz to json
-    elif value == "5":
-
-        mbe = input("MBE [y]: ")
-        meth = input("Method [RIMP2]: ")
-
-        if mbe == "n" or mbe == "N":
-            mbe = False
-        else:
-            mbe = True
-
-        if meth == "":
-            meth = "RIMP2"
-
-        if not filename:
-            filename = glob.glob("*xyz")[0]
-
-        xyz_to_json(filename, mbe, meth)
-
-    # makes smaller shell from json
-    elif value == "6":
-
-        user_ = float(input("Cutoff distance of new shell: "))
-
-        if not filename:
-            filename = glob.glob("*json")[0]
-
-        make_smaller_shell_from_json(filename, user_)
-
 
 # CALL SCRIPT -------------------------------------------
 
 print("What would you like to do?")
-print("    1. Make separate dimer/trimer/tetramer calculations")
-print("    2. Make job from json files")
-print("    3. CSV from log files")
-print("    4. Json to xyz")
-print("    5. Xyz to json")
-print("    6. Make smaller shell from json")
+print("    1. CSV from log files")
+print("    2. Json to xyz")
+print("    3. Xyz to json")
+print("    4. Make job from json files")
+print("    5. Make smaller shell from json")
+print("    6. Make separate dimer/trimer/tetramer calculations")
 print("    0. Quit")
 
 user = None
