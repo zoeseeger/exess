@@ -390,7 +390,7 @@ def json_to_frags(json_data):
     pTable   = periodicTable()
     mbe      = False
 
-    if "MBE" in json_data['model']['method']:
+    if json_data['model']['fragmentation']:
         mbe = True
 
     # FROM JSON
@@ -408,7 +408,7 @@ def json_to_frags(json_data):
         charges  = [0]
 
     # SPLIT GEOMETRY INTO LIST OF [X, Y, Z]
-    coords   = list(chunk(geometry, 3))
+    coords = list(chunk(geometry, 3))
 
     # MAKE EMPTY fragList ORDERED BY GROUP
     for i in range(nfrags):
@@ -459,6 +459,9 @@ def exess_mbe_template(frag_ids, frag_charges, symbols, geometry, method="RIMP2"
     ncheck = number_checkpoints + 1
     ncheck = int((mons+ncheck)/ncheck)
 
+    if number_checkpoints == 0:
+        to_checkpoint = False
+
     dict_ = {
         "driver"    : "energy",
         "model"     : {
@@ -489,7 +492,7 @@ def exess_mbe_template(frag_ids, frag_charges, symbols, geometry, method="RIMP2"
                 "tetramer_mp2_cutoff"   : 10
             },
             "check_rst": {
-                "checkpoint": True,
+                "checkpoint": to_checkpoint,
                 "restart": False,
                 "nfrag_check": min(ncheck, total_frags),
                 "nfrag_stop": min(nfrag_stop, total_frags)
@@ -506,9 +509,6 @@ def exess_mbe_template(frag_ids, frag_charges, symbols, geometry, method="RIMP2"
             "geometry"      : geometry,
         },
     }
-
-    if number_checkpoints == 0:
-        del dict_["keywords"]["check_rst"]
 
     return dict_
 
