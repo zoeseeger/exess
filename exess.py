@@ -1188,7 +1188,6 @@ def energies_from_sep_calcs(logfiles, mers):
 
 def trimer_contributions(trimers, dimers, monomers):
     """Remove dimer and monomer energies from trimer energies."""
-
     for key, dict_ in trimers.items():
         id1, id2, id3 = key.split('-')
         dict_['hf'] = dict_['hf'] - \
@@ -1359,7 +1358,11 @@ def df_from_logs(
 
     # GET CENTRAL IP
     center_ip_id = central_frag(fragList, mx, my, mz)
-    p.print_("center_ip_id", center_ip_id)
+    if os.path.exists("central_ip_id"):
+        center_ip_id = int(open("central_ip_id", 'r').read().strip())
+        print("Central ion pair from file", center_ip_id)
+    else:
+        print("Central ion pair in the middle of the cluster is", center_ip_id)
 
     # ADD DISTANCE FROM CENTRAL FRAG
     fragList = add_dist_from_central_ip(fragList, center_ip_id)
