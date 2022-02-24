@@ -188,20 +188,20 @@ def distance(x1, y1, z1, x2, y2, z2):
     return math.sqrt((x1-x2)**2 + (y1-y2)**2 + (z1-z2)**2)
 
 
-def add_center_of_mass(frag_list, atm_list):
-    """Add center of mass to each frag."""
+def add_centroids(frag_list, atm_list):
+    """Add centroid to each frag."""
 
     for frag in frag_list:
-        m, x, y, z = 0, 0, 0, 0
+        i, x, y, z = 0, 0, 0, 0
         for id in frag['ids']:
             atm = atm_list[id]
-            x += atm["x"] * atm['mas']
-            y += atm["y"] * atm['mas']
-            z += atm["z"] * atm['mas']
-            m += atm['mas']
-        frag['comx'] = x/m
-        frag['comy'] = y/m
-        frag['comz'] = z/m
+            x += atm["x"]
+            y += atm["y"]
+            z += atm["z"]
+            i += 1
+        frag['cx'] = x/i
+        frag['cy'] = y/i
+        frag['cz'] = z/i
 
     return frag_list
 
@@ -219,13 +219,13 @@ def coords_midpoint(atom_list):
 
 def central_frag(frag_list, midpointx, midpointy, midpointz):
     """Returns the frag_id/grp of the central frag by finding the average
-    distance to the midpoint for each fragment."""
+    distance to the centroid for each fragment."""
 
     min_dist = 10000
     min_ion  = None
     for frag in frag_list:
         dist = distance(midpointx, midpointy, midpointz,
-                         frag['comx'], frag['comy'], frag['comz'])
+                         frag['cx'], frag['cy'], frag['cz'])
         if dist < min_dist:
             min_dist  = dist
             min_ion   = frag['grp']
@@ -246,8 +246,8 @@ def distances_to_central_frag(fragList, atmList, center_ip_id, cutoff, mers="dim
 
     if mers == "dimers":
         for i in frags_cutoff:
-            dist = distance(central['comx'], central['comy'], central['comz'],
-                            fragList[i]['comx'], fragList[i]['comy'], fragList[i]['comz'])
+            dist = distance(central['cx'], central['cy'], central['cz'],
+                            fragList[i]['cx'], fragList[i]['cy'], fragList[i]['cz'])
 
             # ADD TO LIST [dist, grp]
             dists_list.append([dist, None, None, None, None, None, None, dist, keyName(fragList[i]["grp"], center_ip_id)])
@@ -259,12 +259,12 @@ def distances_to_central_frag(fragList, atmList, center_ip_id, cutoff, mers="dim
             for j in range(i+1, len(frags_cutoff)):
                 frag2 = fragList[frags_cutoff[j]]
 
-                r1 = distance(central['comx'], central['comy'], central['comz'],
-                        frag1['comx'], frag1['comy'], frag1['comz'])
-                r2 = distance(central['comx'], central['comy'], central['comz'],
-                        frag2['comx'], frag2['comy'], frag2['comz'])
-                r3 = distance(frag1['comx'], frag1['comy'], frag1['comz'],
-                        frag2['comx'], frag2['comy'], frag2['comz'])
+                r1 = distance(central['cx'], central['cy'], central['cz'],
+                        frag1['cx'], frag1['cy'], frag1['cz'])
+                r2 = distance(central['cx'], central['cy'], central['cz'],
+                        frag2['cx'], frag2['cy'], frag2['cz'])
+                r3 = distance(frag1['cx'], frag1['cy'], frag1['cz'],
+                        frag2['cx'], frag2['cy'], frag2['cz'])
                 dist = (r1 + r2 + r3) / 3
                 dmax = max(r1, r2)
                 dists_list.append([dist, r1, r2, r3, None, None, None, dmax, keyName(frag1["grp"], frag2["grp"], center_ip_id)])
@@ -278,18 +278,18 @@ def distances_to_central_frag(fragList, atmList, center_ip_id, cutoff, mers="dim
                 for k in range(j+1, len(frags_cutoff)):
                     frag3 = fragList[frags_cutoff[k]]
 
-                    r1 = distance(central['comx'], central['comy'], central['comz'],
-                                  frag1['comx'], frag1['comy'], frag1['comz'])
-                    r2 = distance(central['comx'], central['comy'], central['comz'],
-                                  frag2['comx'], frag2['comy'], frag2['comz'])
-                    r3 = distance(central['comx'], central['comy'], central['comz'],
-                                  frag3['comx'], frag3['comy'], frag3['comz'])
-                    r4 = distance(frag1['comx'], frag1['comy'], frag1['comz'],
-                                  frag2['comx'], frag2['comy'], frag2['comz'])
-                    r5 = distance(frag1['comx'], frag1['comy'], frag1['comz'],
-                                  frag3['comx'], frag3['comy'], frag3['comz'])
-                    r6 = distance(frag2['comx'], frag2['comy'], frag2['comz'],
-                                  frag3['comx'], frag3['comy'], frag3['comz'])
+                    r1 = distance(central['cx'], central['cy'], central['cz'],
+                                  frag1['cx'], frag1['cy'], frag1['cz'])
+                    r2 = distance(central['cx'], central['cy'], central['cz'],
+                                  frag2['cx'], frag2['cy'], frag2['cz'])
+                    r3 = distance(central['cx'], central['cy'], central['cz'],
+                                  frag3['cx'], frag3['cy'], frag3['cz'])
+                    r4 = distance(frag1['cx'], frag1['cy'], frag1['cz'],
+                                  frag2['cx'], frag2['cy'], frag2['cz'])
+                    r5 = distance(frag1['cx'], frag1['cy'], frag1['cz'],
+                                  frag3['cx'], frag3['cy'], frag3['cz'])
+                    r6 = distance(frag2['cx'], frag2['cy'], frag2['cz'],
+                                  frag3['cx'], frag3['cy'], frag3['cz'])
                     dist = ( r1 + r2 + r3 + r4 + r5 + r6 ) / 6
                     dmax = max(r1, r2, r3)
                     dists_list.append([dist, r1, r2, r3, r4, r5, r6, dmax, keyName(frag1["grp"], frag2["grp"], frag3["grp"], center_ip_id)])
@@ -335,7 +335,7 @@ def add_two_frags_together(fragList, atm_list, frag1_id, frag2_id):
         'name': fragList[new_id]['name'],
     }
 
-    new_frag = add_center_of_mass([new_frag], atm_list)
+    new_frag = add_centroids([new_frag], atm_list)
 
     new_fragList.extend(new_frag) # add new frag
 
@@ -359,9 +359,9 @@ def add_dist_from_central_ip(fragList, center_ip_id):
     """Add distance from center_ip which should be first in list."""
 
     for frag in fragList:
-        frag['dist'] = distance(fragList[center_ip_id]['comx'], fragList[center_ip_id]['comy'],
-                                fragList[center_ip_id]['comz'],
-                                frag['comx'], frag['comy'], frag['comz'])
+        frag['dist'] = distance(fragList[center_ip_id]['cx'], fragList[center_ip_id]['cy'],
+                                fragList[center_ip_id]['cz'],
+                                frag['cx'], frag['cy'], frag['cz'])
     return fragList
 
 
@@ -652,7 +652,7 @@ def write_xyz(filename, lines, atmList=None):
 
 
 def write_central_ip(fragList, atmList, center_ip_id, mx, my, mz):
-    """WRITE XYZS, COMS, MIDPOINT AND CENTRAL IP TO XYZ"""
+    """WRITE XYZS, MIDPOINT AND CENTRAL IP TO XYZ"""
 
     lines = []
 
@@ -1241,42 +1241,6 @@ def remove_additional_mers(dict_):
     return dict_
 
 
-def distance_central_com_of_dimer(fragList, atmList, center_ip_id, cutoff):
-    """Get distances for trimer extrapolation where R is the distance of the center of mass of the central ion pair
-    with the center of mass of the remaining dimer."""
-
-    dists_dict = {}
-    central = fragList[center_ip_id]
-
-    # FRAG INDICES THOSE BELOW CUTOFFS
-    frags_cutoff = []
-    for i in range(len(fragList)):
-        if fragList[i]["dist"] < cutoff and i != center_ip_id:
-            frags_cutoff.append(i)
-
-    for i in range(len(frags_cutoff)):
-        frag1 = fragList[frags_cutoff[i]]
-        for j in range(i+1, len(frags_cutoff)):
-            frag2 = fragList[frags_cutoff[j]]
-
-            m, x, y, z = 0, 0, 0, 0
-            for id in frag1['ids'] + frag2['ids']:
-                atm = atmList[id]
-                x += atm["x"] * atm['mas']
-                y += atm["y"] * atm['mas']
-                z += atm["z"] * atm['mas']
-                m += atm['mas']
-            comx = x / m
-            comy = y / m
-            comz = z / m
-
-            r = distance(central['comx'], central['comy'], central['comz'],
-                    comx, comy, comz)
-            dists_dict[keyName(frag1["grp"], frag2["grp"], center_ip_id)] = r
-
-    return dists_dict
-
-
 ### TOP LEVEL --------------------------------------------------------
 
 def make_dimer_trimer_tetramer_calcs(jsonfile, method="RIMP2", num_json_dimers=50, num_json_trimers=30, num_json_tetramers=10, dimers=True, trimers=True, tetramers=True, debug=False, cutoff_dims=None, cutoff_trims=None, cutoff_tets=None):
@@ -1292,8 +1256,8 @@ def make_dimer_trimer_tetramer_calcs(jsonfile, method="RIMP2", num_json_dimers=5
     # CONVERT JSON TO FRAG DATA
     fragList, atmList, totChrg, totMult, mbe = json_to_frags(json_data)
 
-    # ADD CENTER OF MASS (COM) - USED FOR CENTRAL IP
-    fragList = add_center_of_mass(fragList, atmList)
+    # ADD CENTROID - USED FOR CENTRAL IP
+    fragList = add_centroids(fragList, atmList)
 
     # GET MIDPOINT OF ALL COORDS
     mx, my, mz = coords_midpoint(atmList)
@@ -1306,7 +1270,7 @@ def make_dimer_trimer_tetramer_calcs(jsonfile, method="RIMP2", num_json_dimers=5
     # ADD DIST FROM CENTRAL IP
     fragList = add_dist_from_central_ip(fragList, center_ip_id)
 
-    # WRITE XYZS, COMS, MIDPOINT AND CENTRAL IP TO XYZ
+    # WRITE XYZS, MIDPOINT AND CENTRAL IP TO XYZ
     if debug:
         write_central_ip(fragList, atmList, center_ip_id, mx, my, mz)
 
@@ -1349,8 +1313,8 @@ def df_from_logs(
     # CONVERT JSON TO FRAG DATA
     fragList, atmList, totChrg, totMult, mbe = json_to_frags(json_data)
 
-    # ADD CENTER OF MASS (COM) - USED FOR CENTRAL IP
-    fragList = add_center_of_mass(fragList, atmList)
+    # ADD CENTROIDS - USED FOR CENTRAL IP
+    fragList = add_centroids(fragList, atmList)
 
     # GET MIDPOINT OF XYZ
     mx, my, mz = coords_midpoint(atmList)
@@ -1367,7 +1331,7 @@ def df_from_logs(
     # ADD DISTANCE FROM CENTRAL FRAG
     fragList = add_dist_from_central_ip(fragList, center_ip_id)
 
-    # WRITE XYZS, COMS, MIDPOINT AND CENTRAL IP TO XYZ
+    # WRITE XYZS, CENTROIDS, MIDPOINT AND CENTRAL IP TO XYZ
     if debug:
         write_central_ip(fragList, atmList, center_ip_id, mx, my, mz)
 
@@ -1447,8 +1411,8 @@ def make_smaller_shell_from_json(json_, cutoff):
     if not mbe:
         sys.exit('Expected MBE input. exiting ...')
 
-    # ADD CENTER OF MASS (COM) - USED FOR CENTRAL IP
-    fragList = add_center_of_mass(fragList, atmList)
+    # ADD CENTROIDS - USED FOR CENTRAL IP
+    fragList = add_centroids(fragList, atmList)
 
     # GET MIDPOINT OF ALL COORDS
     mx, my, mz = coords_midpoint(atmList)
