@@ -257,13 +257,13 @@ def distances_to_central_frag(fragList, atmList, center_ip_id, cutoff, mers="dim
             frag1 = fragList[frags_cutoff[i]]
             for j in range(i+1, len(frags_cutoff)):
                 frag2 = fragList[frags_cutoff[j]]
-                r1 = frag1["dist"]
-                r2 = frag2["dist"]
-                r3 = distance(frag1['cx'], frag1['cy'], frag1['cz'],
-                        frag2['cx'], frag2['cy'], frag2['cz'])
-                dist = (r1 + r2 + r3) / 3
-                dmax = max(r1, r2)
-                dists_list.append([dist, r1, r2, r3, None, None, None, dmax, keyName(frag1["grp"], frag2["grp"], center_ip_id)])
+                r3 = distance(frag1['cx'], frag1['cy'], frag1['cz'], frag2['cx'], frag2['cy'], frag2['cz'])
+                if r3 < cutoff:
+                    r1 = frag1["dist"]
+                    r2 = frag2["dist"]
+                    dist = (r1 + r2 + r3) / 3
+                    dmax = max(r1, r2)
+                    dists_list.append([dist, r1, r2, r3, None, None, None, dmax, keyName(frag1["grp"], frag2["grp"], center_ip_id)])
 
     elif mers == "tetramers":
 
@@ -271,20 +271,19 @@ def distances_to_central_frag(fragList, atmList, center_ip_id, cutoff, mers="dim
             frag1 = fragList[frags_cutoff[i]]
             for j in range(i+1, len(frags_cutoff)):
                 frag2 = fragList[frags_cutoff[j]]
-                for k in range(j+1, len(frags_cutoff)):
-                    frag3 = fragList[frags_cutoff[k]]
-                    r1 = frag1["dist"]
-                    r2 = frag2["dist"]
-                    r3 = frag3["dist"]
-                    r4 = distance(frag1['cx'], frag1['cy'], frag1['cz'],
-                                  frag2['cx'], frag2['cy'], frag2['cz'])
-                    r5 = distance(frag1['cx'], frag1['cy'], frag1['cz'],
-                                  frag3['cx'], frag3['cy'], frag3['cz'])
-                    r6 = distance(frag2['cx'], frag2['cy'], frag2['cz'],
-                                  frag3['cx'], frag3['cy'], frag3['cz'])
-                    dist = ( r1 + r2 + r3 + r4 + r5 + r6 ) / 6
-                    dmax = max(r1, r2, r3)
-                    dists_list.append([dist, r1, r2, r3, r4, r5, r6, dmax, keyName(frag1["grp"], frag2["grp"], frag3["grp"], center_ip_id)])
+                r4 = distance(frag1['cx'], frag1['cy'], frag1['cz'], frag2['cx'], frag2['cy'], frag2['cz'])
+                if r4 < cutoff:
+                    for k in range(j+1, len(frags_cutoff)):
+                        frag3 = fragList[frags_cutoff[k]]
+                        r5 = distance(frag1['cx'], frag1['cy'], frag1['cz'], frag3['cx'], frag3['cy'], frag3['cz'])
+                        r6 = distance(frag2['cx'], frag2['cy'], frag2['cz'], frag3['cx'], frag3['cy'], frag3['cz'])
+                        if r5 < cutoff and r6 < cutoff:
+                            r1 = frag1["dist"]
+                            r2 = frag2["dist"]
+                            r3 = frag3["dist"]
+                            dist = ( r1 + r2 + r3 + r4 + r5 + r6 ) / 6
+                            dmax = max(r1, r2, r3)
+                            dists_list.append([dist, r1, r2, r3, r4, r5, r6, dmax, keyName(frag1["grp"], frag2["grp"], frag3["grp"], center_ip_id)])
 
     return sorted(dists_list, key=lambda x:x[0])
 
@@ -758,7 +757,6 @@ def write_xxmers(fragList, atmList, center_ip_id, method="RIMP2", typ="dimers", 
     print("Ion pairs in", cutoff_all, ":", len(frags_cutoff_all)+1)
     print("Ion pairs in cutoff_central", ":", frags_cutoff_central)
     print("Ion pairs in cutoff_all", ":", frags_cutoff_all)
-
 
     inputs = []
     if typ == "dimers":
@@ -1284,9 +1282,9 @@ def df_from_logs(
         hf_dump_file=None,
         debug=False,
         get_energies="end",
-        cutoff_dims="None",
-        cutoff_trims="None",
-        cutoff_tets="None",
+        cutoff_dims=10000,
+        cutoff_trims=10000,
+        cutoff_tets=10000,
     ):
     """Make pandas data frame from json and log files."""
 
@@ -1326,9 +1324,12 @@ def df_from_logs(
     if get_energies == "end":
         name = logfile.split('.')
         monomers, dimers, trimers, tetramers = energies_from_mbe_log(logfile)
-        cutoff_dims = json_data["keywords"]["frag"].get("dimer_cutoff", "None")/angstrom2bohr
-        cutoff_trims = json_data["keywords"]["frag"].get("trimer_cutoff", "None")/angstrom2bohr
-        cutoff_tets = json_data["keywords"]["frag"].get("tetramer_cutoff", "None")/angstrom2bohr
+        cutoff_dims = json_data["keywords"]["frag"].get("dimer_cutoff", 10000)/angstrom2bohr
+        cutoff_trims = json_data["keywords"]["frag"].get("trimer_cutoff", 10000)/angstrom2bohr
+        cutoff_tets = json_data["keywords"]["frag"].get("tetramer_cutoff", 10000)/angstrom2bohr
+        print("Dimer cutoff:", cutoff_dims)
+        print("Trimer cutoff:", cutoff_trims)
+        print("Tetramer cutoff:", cutoff_tets)
     elif get_energies == "dump":
         name = logfile.split('.')
         fragments = energies_corr_from_log_when_calculated(logfile) # mp2 from start of files
@@ -1350,13 +1351,6 @@ def df_from_logs(
             trimers = remove_additional_mers(trimers)
     p.print_("name", name)
     p.print_(f"monomers['{center_ip_id}']", monomers[str(center_ip_id)])
-
-    if cutoff_dims == "None":
-        cutoff_dims = 10000
-    if cutoff_trims == "None":
-        cutoff_trims = 10000
-    if cutoff_tets == "None":
-        cutoff_tets = 10000
 
     # DISTANCE FROM EACH FRAG TO CENTRAL IP
     dimers_dists = distances_to_central_frag(fragList, atmList, center_ip_id, cutoff_dims, mers="dimers")
@@ -1464,7 +1458,9 @@ def run(value, filename):
             user_ = input("Cutoffs Dimers Trimers Tetramers [None 35 20]: ")
             if user_ == "":
                 user_ = "None 35 20"
-            dim, tri, tet = user_.split()
+            user_ = user_.replace("None", "10000")
+            dim, tri, tet = [float(i) for i in user_.split()]
+
         else:
             log = glob.glob("*.log")[0]
             get_energies = "end"
