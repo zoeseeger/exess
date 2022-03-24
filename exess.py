@@ -472,6 +472,7 @@ def exess_mbe_template(frag_ids, frag_charges, symbols, geometry, method="RIMP2"
                 "ndiis"             : 10,
                 "dele"              : 1E-8,
                 "rmsd"              : 1E-8,
+                "dynamic_threshold" : 10,
                 "debug"             : False,
             },
             "frag": {
@@ -1483,17 +1484,21 @@ def run(value, filename):
     elif value == "2":
 
         if not filename:
-            filename = glob.glob("*json")[0]
+            files = glob.glob("*json")
+        else:
+            files = [filename]
 
-        # READ JSON
-        json_data = read_json(filename)
+        for filename in files:
 
-        # CONVERT JSON TO FRAG DATA
-        _, atmList, _, _, _ = json_to_frags(json_data)
+            # READ JSON
+            json_data = read_json(filename)
 
-        # WRITE XYZ
-        xyzfile = filename.replace(".json", ".xyz")
-        write_xyz(xyzfile, lines=[], atmList=atmList)
+            # CONVERT JSON TO FRAG DATA
+            _, atmList, _, _, _ = json_to_frags(json_data)
+
+            # WRITE XYZ
+            xyzfile = filename.replace(".json", ".xyz")
+            write_xyz(xyzfile, lines=[], atmList=atmList)
 
     # xyz to json
     elif value == "3":
@@ -1510,9 +1515,11 @@ def run(value, filename):
             meth = "RIMP2"
 
         if not filename:
-            filename = glob.glob("*xyz")[0]
-
-        xyz_to_json(filename, mbe, meth)
+            files = glob.glob("*xyz")
+            for filename in files:
+                xyz_to_json(filename, mbe, meth)
+        else:
+            xyz_to_json(filename, mbe, meth)
 
     # make job from jsons
     elif value == "4":
