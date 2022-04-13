@@ -232,11 +232,43 @@ def central_frag(frag_list, midpointx, midpointy, midpointz):
     return min_ion
 
 
-def distances_to_central_frag(fragList, atmList, center_ip_id, cutoff, mers="dimers"):
+def distances_between_frags(fragList, cutoff, mers="dimers"):
+    """Find the distance between each frag calc."""
+
+    dists_list = []
+
+    if mers == "dimers":
+        for i in range(len(fragList)-1):
+            frag1 = fragList[i]
+            for j in range(i+1, len(fragList)):
+                frag2 = fragList[j]
+                r1 = distance(frag1['cx'], frag1['cy'], frag1['cz'], frag2['cx'], frag2['cy'], frag2['cz'])
+                if r1 < cutoff:
+                    dists_list.append([r1, None, None, None, None, None, None, r1, keyName(frag1["grp"], frag2["grp"])])
+
+    elif mers == "trimers":
+        for i in range(len(fragList)-2):
+            frag1 = fragList[i]
+            for j in range(i+1, len(fragList)-1):
+                frag2 = fragList[j]
+                r1 = distance(frag1['cx'], frag1['cy'], frag1['cz'], frag2['cx'], frag2['cy'], frag2['cz'])
+                if r1 < cutoff:
+                    for k in range(j+1, len(fragList)):
+                        frag3 = fragList[k]
+                        r2 = distance(frag1['cx'], frag1['cy'], frag1['cz'], frag3['cx'], frag3['cy'], frag3['cz'])
+                        r3 = distance(frag2['cx'], frag2['cy'], frag2['cz'], frag3['cx'], frag3['cy'], frag3['cz'])
+                        if r2 < cutoff and r3 < cutoff:
+                            dmax = max(r1, r2, r3)
+                            dist = (r1 + r2 + r3) / 3
+                            dists_list.append([dist, r1, r2, r3, None, None, None, dmax, keyName(frag1["grp"], frag2["grp"], frag3["grp"])])
+
+    return sorted(dists_list, key=lambda x:x[0])
+
+
+def distances_to_central_frag(fragList, center_ip_id, cutoff, mers="dimers"):
     """Find the distance between each frag and the central ion pair."""
 
     dists_list = []
-    central = fragList[center_ip_id]
 
     # FRAG INDICES THOSE BELOW CUTOFFS
     frags_cutoff = []
@@ -385,9 +417,14 @@ def json_to_frags(json_data):
     totMult  = 0
     pTable   = periodicTable()
     mbe      = False
+    lattice  = False
 
-    if json_data['model']['fragmentation']:
+
+    if json_data['model'].get('fragmentation'):
         mbe = True
+        if json_data["keywords"]["frag"].get("lattice_energy_calc"):
+            lattice = True
+
 
     # FROM JSON
     symbols  = json_data["molecule"]["symbols"]
@@ -438,7 +475,7 @@ def json_to_frags(json_data):
         fragList[grp]['ids'].append(i)
         fragList[grp]['syms'].append(symbols[i])
 
-    return fragList, atmList, totChrg, totMult, mbe
+    return fragList, atmList, totChrg, totMult, mbe, lattice
 
 
 def exess_mbe_template(frag_ids, frag_charges, symbols, geometry, method="RIMP2", nfrag_stop=None, basis="cc-pVDZ", auxbasis="cc-pVDZ-RIFIT", number_checkpoints=3, ref_mon=0):
@@ -603,6 +640,7 @@ def format_json_input_file(dict_):
 
 def make_exess_input_from_frag_ids(frag_indexs, fragList, atmList, method="RIMP2", nfrag_stop=None, basis="cc-pVDZ", auxbasis="cc-pVDZ-RIFIT", number_checkpoints=3, mbe=False, ref_mon=0):
     """Make exess input from frag indexes and fraglist."""
+
     symbols      = []
     frag_ids     = []
     frag_charges = []
@@ -858,12 +896,15 @@ def energies_from_mbe_log(filename):
 
     for line in lines:
 
-        if '-----ENERGIES OF MONOMERS------' in line:
+        if not line.strip():
+            continue
+
+        elif '-----ENERGIES OF MONOMERS------' in line:
             energies = True
             dims = False
             mons = True
 
-        elif not energies or not line.strip():
+        elif not energies:
             continue
 
         elif 'Final E(HF) =' in line:
@@ -881,15 +922,21 @@ def energies_from_mbe_log(filename):
             tris = False
             tets = True
 
-        elif 'Summary of MBE RI-MP2 OS energies' in line:
+        elif 'RI-MP2 OS energies***' in line:
             ss_ = False
             os_ = True
             hf = False
 
-        elif 'Summary of MBE RI-MP2 SS energies' in line:
+        elif 'RI-MP2 SS energies***' in line:
             ss_ = True
             os_ = False
             hf = False
+
+        elif 'ID' in line:
+            if 'RIJ' in line:
+                rij = True
+            else:
+                rij = False
 
         # ENERGIES
         else:
@@ -897,21 +944,60 @@ def energies_from_mbe_log(filename):
             # IF ENERGIES IN LINE
             if re.search('^[0-9]', line) or line.startswith('('):
                 if mons:
-                    id, e = line.split()
+                    if rij:
+                        spl_line = line.split()
+                        if len(spl_line) == 3:
+                            id, e, rij = spl_line
+                        elif len(spl_line) == 2:
+                            id, hold = spl_line
+                            e = hold[:-1]
+                            rij = hold[-1]
+                        else:
+                            sys.exit("Unexpected number of items in split line")
+                    else:
+                        id, e = line.split()
                     monomers = storeEnergy(monomers, id, e)
 
                 elif dims:
-                    id1, id2, e = line.split()
+                    if rij:
+                        spl_line = line.split()
+                        if len(spl_line) == 4:
+                            id1, id2, e, rij = spl_line
+                        elif len(spl_line) == 3:
+                            id1, id2, hold = spl_line
+                            e = hold[:-1]
+                            rij = hold[-1]
+                        else:
+                            sys.exit("Unexpected number of items in split line")
+                    else:
+                        id1, id2, e = line.split()
                     key = keyName(id1, id2)
                     dimers = storeEnergy(dimers, key, e)
 
                 elif tris:
-                    id1, id2, id3, e = line.split()
+                    if rij:
+                        spl_line = line.split()
+                        if len(spl_line) == 5:
+                            id1, id2, id3, e, rij = spl_line
+                        elif len(spl_line) == 4:
+                            id1, id2, id3, hold = spl_line
+                            e = hold[:-1]
+                            rij = hold[-1]
+                    else:
+                        id1, id2, id3, e = line.split()
                     key = keyName(id1, id2, id3)
                     trimers = storeEnergy(trimers, key, e)
 
                 elif tets:
-                    id1, id2, id3, id4, e = line.split()
+                    if rij:
+                        if len(spl_line) == 5:
+                            id1, id2, id3, id4, e, rij = spl_line
+                        elif len(spl_line) == 4:
+                            id1, id2, id3, id4, hold = spl_line
+                            e = hold[:-1]
+                            rij = hold[-1]
+                    else:
+                        id1, id2, id3, id4, e = line.split()
                     key = keyName(id1, id2, id3, id4)
                     tetramers = storeEnergy(tetramers, key, e)
 
@@ -1024,7 +1110,7 @@ def distance_energy_df(dimer_dists, center_ip_id, monomers, dimers, trimers=None
         tot_frag, mp2_frag, srs_frag, hf_frag, type_frag = energy_list(tetramer_dists, tetramers, tot_frag, mp2_frag, srs_frag, hf_frag, type_frag, typ="tetramer")
 
     data = {
-        'dave': dists_list,
+        'dave' : dists_list,
         'ids'  : ids_list,
         'tot'  : tot_frag,
         'hf'   : hf_frag,
@@ -1245,7 +1331,7 @@ def make_dimer_trimer_tetramer_calcs(jsonfile, method="RIMP2", num_json_dimers=5
     json_data = read_json(jsonfile)
 
     # CONVERT JSON TO FRAG DATA
-    fragList, atmList, totChrg, totMult, mbe = json_to_frags(json_data)
+    fragList, atmList, totChrg, totMult, mbe, lattice = json_to_frags(json_data)
 
     # ADD CENTROID - USED FOR CENTRAL IP
     fragList = add_centroids(fragList, atmList)
@@ -1295,7 +1381,7 @@ def df_from_logs(
     json_data = read_json(jsonfile)
 
     # CONVERT JSON TO FRAG DATA
-    fragList, atmList, totChrg, totMult, mbe = json_to_frags(json_data)
+    fragList, atmList, totChrg, totMult, mbe, lattice = json_to_frags(json_data)
 
     # ADD CENTROIDS - USED FOR CENTRAL IP
     fragList = add_centroids(fragList, atmList)
@@ -1353,14 +1439,16 @@ def df_from_logs(
     p.print_("name", name)
     p.print_(f"monomers['{center_ip_id}']", monomers[str(center_ip_id)])
 
-    # DISTANCE FROM EACH FRAG TO CENTRAL IP
-    dimers_dists = distances_to_central_frag(fragList, atmList, center_ip_id, cutoff_dims, mers="dimers")
-    trimers_dists = distances_to_central_frag(fragList, atmList, center_ip_id, cutoff_trims, mers="trimers")
-    tetramer_dists = distances_to_central_frag(fragList, atmList, center_ip_id, cutoff_tets, mers="tetramers")
-    # p.print_("dimers_dists[0]", dimers_dists[0])
-    # print(dimers_dists)
-    # print(trimers_dists)
-    # print(tetramer_dists)
+    if lattice:
+        # DISTANCE FROM EACH FRAG TO CENTRAL IP
+        dimers_dists = distances_to_central_frag(fragList, center_ip_id, cutoff_dims, mers="dimers")
+        trimers_dists = distances_to_central_frag(fragList, center_ip_id, cutoff_trims, mers="trimers")
+        tetramer_dists = distances_to_central_frag(fragList, center_ip_id, cutoff_tets, mers="tetramers")
+
+    else:
+        dimers_dists = distances_between_frags(fragList, cutoff_dims, mers="dimers")
+        trimers_dists = distances_between_frags(fragList, cutoff_trims, mers="trimers")
+        tetramer_dists = []
 
     # ENERGY PER DISTANCE - PANDAS
     df_data = distance_energy_df(dimers_dists, center_ip_id, monomers, dimers, trimers, tetramers, trimers_dists, tetramer_dists)
@@ -1395,7 +1483,7 @@ def make_smaller_shell_from_json(json_, cutoff):
     json_data = read_json(json_)
 
     # CONVERT JSON TO FRAG DATA
-    fragList, atmList, totChrg, totMult, mbe = json_to_frags(json_data)
+    fragList, atmList, totChrg, totMult, mbe, lattice = json_to_frags(json_data)
 
     # CHECK IS MBE
     if not mbe:
@@ -1425,6 +1513,28 @@ def make_smaller_shell_from_json(json_, cutoff):
     write_file(json_.replace('.js', f'-{cutoff}.js'), json_lines)
     write_xyz(json_.replace('.json', f'-{cutoff}.xyz'), lines)
     write_file("indexes.txt", [str(i) for i in indexes])
+
+
+def geometryFromFragIds(json_, id_list):
+    """Takes a json mbe file and keeps only frags listed by user."""
+
+    # READ JSON
+    json_data = read_json(json_)
+
+    # CONVERT JSON TO FRAG DATA
+    fragList, atmList, totChrg, totMult, mbe, lattice = json_to_frags(json_data)
+
+    # CHECK IS MBE
+    if not mbe:
+        sys.exit('Expected MBE input. exiting ...')
+
+    # NEW MBE
+    json_lines, lines = make_exess_input_from_frag_ids(id_list, fragList, atmList)
+
+    # WRITE FILES
+    ids = '-'.join(id_list)
+    write_file(json_.replace('.js', f'-{ids}.js'), json_lines)
+    write_xyz(json_.replace('.json', f'-{ids}.xyz'), lines)
 
 
 def xyz_to_json(filename, mbe, method):
@@ -1494,7 +1604,7 @@ def run(value, filename):
             json_data = read_json(filename)
 
             # CONVERT JSON TO FRAG DATA
-            _, atmList, _, _, _ = json_to_frags(json_data)
+            _, atmList, _, _, _, _ = json_to_frags(json_data)
 
             # WRITE XYZ
             xyzfile = filename.replace(".json", ".xyz")
@@ -1536,8 +1646,24 @@ def run(value, filename):
 
         make_smaller_shell_from_json(filename, user_)
 
-    # make sep dimer/trimer/tetramer calcs
+    # print json with only frags listed
     elif value == "6":
+
+        user_ = float(input("Frags IDs separated with space: "))
+
+        try:
+            ids = [int(x) for x in user_.split()]
+        except:
+            sys.exit("Could not split input into integers.")
+
+        if not filename:
+            filename = glob.glob("*json")[0]
+
+        geometryFromFragIds(filename, ids)
+
+
+    # make sep dimer/trimer/tetramer calcs
+    elif value == "7":
 
         def t_or_f(value):
             if value == 't':
@@ -1611,12 +1737,13 @@ print("    2. Json to xyz")
 print("    3. Xyz to json")
 print("    4. Make job from json files")
 print("    5. Make smaller shell from json")
-print("    6. Make separate dimer/trimer/tetramer calculations")
+print("    6. Get geometry from frag list")
+print("    7. Make separate dimer/trimer/tetramer calculations")
 print("    0. Quit")
 
 user = None
 filename = None
-while not user in ["1", "2", "3", "4", "5", "6", "0", '']:
+while not user in ["1", "2", "3", "4", "5", "6", "7", "0", '']:
 
     if len(sys.argv) > 1:
         filename = sys.argv[1]
