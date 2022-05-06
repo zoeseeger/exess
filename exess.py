@@ -901,6 +901,8 @@ def energies_from_mbe_log(filename):
 
         elif '-----ENERGIES OF MONOMERS------' in line:
             energies = True
+            tets = False
+            tris = False
             dims = False
             mons = True
 
@@ -1038,7 +1040,6 @@ def distance_energy_df(dimer_dists, center_ip_id, monomers, dimers, trimers=None
         conversion = hartree2kjmol
     else:
         conversion = 1
-    monomer = monomers[str(center_ip_id)]
 
     basis = "vdz"
 
@@ -1080,13 +1081,32 @@ def distance_energy_df(dimer_dists, center_ip_id, monomers, dimers, trimers=None
             r6.append(r6_)
             rmax.append(rm)
             ids_list.append(key)
-            hf = e_dict[key]['hf'] / num_frags * conversion
-            mp2 = (e_dict[key]['os'] + e_dict[key]['ss']) / num_frags * conversion
-            srs = e_dict[key]['os'] / num_frags * os_coef * conversion
+
+            # get hf
+            hf = e_dict.get(key, {}).get('hf')
+            if not hf:
+                hf = np.nan
+                print(f"!!!Frag {key} HF not found with ave distance {d}!!!")
+                sys.exit()
+            hf = hf / num_frags * conversion
+
+            # get corr
+            os = e_dict.get(key, {}).get('os')
+            ss = e_dict.get(key, {}).get('ss')
+            if not os:
+                os = np.nan
+                ss = np.nan
+                # print(f"!!!Frag {key} OS not found with ave distance {d}!!!")
+                sys.exit()
+            mp2 = (os + ss) / num_frags * conversion
+            srs = os / num_frags * os_coef * conversion
+
+            # add hf to cor if calculated for this frag
             if np.isnan(srs):
                 tot = hf
             else:
                 tot = hf + srs
+
             tot_frag.append(tot)
             mp2_frag.append(mp2)
             srs_frag.append(srs)
@@ -1096,9 +1116,13 @@ def distance_energy_df(dimer_dists, center_ip_id, monomers, dimers, trimers=None
         return tot_frag, mp2_frag, srs_frag, hf_frag, type_frag
 
     # MONOMER ENERGIES
-    hf = monomer['hf'] * conversion
-    mp2 = (monomer['os'] + monomer['ss']) * conversion
-    srs = monomer['os'] * os_coef * conversion
+    # a_dict = {"a":1, "b":2, "c": 3}
+    # values = a_dict. values() Return values of a dictionary.
+    # total = sum(values) Compute sum of the values.
+
+    hf  = sum([i['hf'] for i in monomers.values()]) * conversion
+    mp2 = sum([i['os'] + i['ss'] for i in monomers.values()]) * conversion
+    srs = sum([i['os'] for i in monomers.values()]) * os_coef * conversion
     tot = hf + srs
     tot_frag, mp2_frag, srs_frag, hf_frag, type_frag  = [tot], [mp2], [srs], [hf], ["monomer"]
 
@@ -1382,6 +1406,8 @@ def df_from_logs(
 
     # CONVERT JSON TO FRAG DATA
     fragList, atmList, totChrg, totMult, mbe, lattice = json_to_frags(json_data)
+    p.print_("mbe", mbe)
+    p.print_("lattice", lattice)
 
     # ADD CENTROIDS - USED FOR CENTRAL IP
     fragList = add_centroids(fragList, atmList)
@@ -1437,6 +1463,7 @@ def df_from_logs(
         if os.path.isdir("trimers"):
             trimers = remove_additional_mers(trimers)
     p.print_("name", name)
+    print(monomers)
     p.print_(f"monomers['{center_ip_id}']", monomers[str(center_ip_id)])
 
     if lattice:
@@ -1444,6 +1471,8 @@ def df_from_logs(
         dimers_dists = distances_to_central_frag(fragList, center_ip_id, cutoff_dims, mers="dimers")
         trimers_dists = distances_to_central_frag(fragList, center_ip_id, cutoff_trims, mers="trimers")
         tetramer_dists = distances_to_central_frag(fragList, center_ip_id, cutoff_tets, mers="tetramers")
+        # only keep central frag
+        monomers = {str(center_ip_id): monomers[str(center_ip_id)]}
 
     else:
         dimers_dists = distances_between_frags(fragList, cutoff_dims, mers="dimers")
@@ -1529,10 +1558,10 @@ def geometryFromFragIds(json_, id_list):
         sys.exit('Expected MBE input. exiting ...')
 
     # NEW MBE
-    json_lines, lines = make_exess_input_from_frag_ids(id_list, fragList, atmList)
+    json_lines, lines = make_exess_input_from_frag_ids(id_list, fragList, atmList, number_checkpoints=0, mbe=mbe)
 
     # WRITE FILES
-    ids = '-'.join(id_list)
+    ids = '-'.join([str(x) for x in id_list])
     write_file(json_.replace('.js', f'-{ids}.js'), json_lines)
     write_xyz(json_.replace('.json', f'-{ids}.xyz'), lines)
 
@@ -1577,8 +1606,8 @@ def run(value, filename):
             get_energies = "end"
             dim, tri, tet = "None", "None", "None"
 
-
         jsn = glob.glob("*.json")[0]
+        print(f"File used: {jsn}")
         df_from_logs(
             jsonfile=jsn,
             logfile=log,
@@ -1598,6 +1627,7 @@ def run(value, filename):
         else:
             files = [filename]
 
+        print(f"Files used: {files}")
         for filename in files:
 
             # READ JSON
@@ -1626,9 +1656,11 @@ def run(value, filename):
 
         if not filename:
             files = glob.glob("*xyz")
+            print(f"Files used: {files}")
             for filename in files:
                 xyz_to_json(filename, mbe, meth)
         else:
+            print(f"File used: {filename}")
             xyz_to_json(filename, mbe, meth)
 
     # make job from jsons
@@ -1644,12 +1676,13 @@ def run(value, filename):
         if not filename:
             filename = glob.glob("*json")[0]
 
+        print(f"File used: {filename}")
         make_smaller_shell_from_json(filename, user_)
 
     # print json with only frags listed
     elif value == "6":
 
-        user_ = float(input("Frags IDs separated with space: "))
+        user_ = input("Frags IDs separated with space: ")
 
         try:
             ids = [int(x) for x in user_.split()]
@@ -1659,8 +1692,8 @@ def run(value, filename):
         if not filename:
             filename = glob.glob("*json")[0]
 
+        print(f"File used: {filename}")
         geometryFromFragIds(filename, ids)
-
 
     # make sep dimer/trimer/tetramer calcs
     elif value == "7":
@@ -1713,6 +1746,7 @@ def run(value, filename):
                 user_ = "130 70 40"
             num_json_dimers, num_json_trimers, num_json_tetramers = [int(i) for i in user_.split()]
 
+        print(f"File used: {jsn}")
         make_dimer_trimer_tetramer_calcs(
             jsonfile=jsn,
             num_json_dimers=num_json_dimers,
