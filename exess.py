@@ -8,6 +8,7 @@ import glob
 import math
 import json
 import tqdm
+reimport h5py
 import numpy as np
 import pandas as pd
 sys.path.append("/Users/zoes/apps/qcp-python-app/qcp")
@@ -1287,9 +1288,39 @@ def energies_from_sep_calcs(logfiles, mers):
     return dict_
 
 
-def trimer_contributions(trimers, dimers, monomers):
+def dimer_contributions(dimers, monomers, np_for_zero=False):
+    """Remove monomer energies from dimer energies."""
+
+    # 0.0 for energies not calculated will mess up contributions
+    for key, dict_ in dimers.items():
+        id1, id2 = key.split('-')
+        if np_for_zero:
+            if dict_['hf'] == 0.0:
+                dict_['hf'] = np.nan
+            if dict_['os'] == 0.0:
+                dict_['os'] = np.nan
+            if dict_['ss'] == 0.0:
+                dict_['ss'] = np.nan
+        dict_['hf'] = dict_['hf'] - monomers[id1]['hf'] - monomers[id2]['hf']
+        dict_['os'] = dict_['os'] - monomers[id1]['os'] - monomers[id2]['os']
+        dict_['ss'] = dict_['ss'] - monomers[id1]['ss'] - monomers[id2]['ss']
+    return dimers
+
+
+def trimer_contributions(trimers, dimers, monomers, np_for_zero=False):
     """Remove dimer and monomer energies from trimer energies."""
+
     for key, dict_ in trimers.items():
+
+        # 0.0 for energies not calculated will mess up contributions
+        if np_for_zero:
+            if dict_['hf'] == 0.0:
+                dict_['hf'] = np.nan
+            if dict_['os'] == 0.0:
+                dict_['os'] = np.nan
+            if dict_['ss'] == 0.0:
+                dict_['ss'] = np.nan
+
         id1, id2, id3 = key.split('-')
         dict_['hf'] = dict_['hf'] - \
             dimers[keyName(id1, id2)]['hf'] - dimers[keyName(id1, id3)]['hf'] - dimers[keyName(id2, id3)]['hf'] - \
@@ -1306,10 +1337,20 @@ def trimer_contributions(trimers, dimers, monomers):
     return trimers
 
 
-def tetramer_contributions(tetramers, trimers, dimers, monomers):
+def tetramer_contributions(tetramers, trimers, dimers, monomers, np_for_zero=False):
     """Remove trimer, dimer and monomer energies from tetramer energies."""
 
     for key, dict_ in tetramers.items():
+
+        # 0.0 for energies not calculated will mess up contributions
+        if np_for_zero:
+            if dict_['hf'] == 0.0:
+                dict_['hf'] = np.nan
+            if dict_['os'] == 0.0:
+                dict_['os'] = np.nan
+            if dict_['ss'] == 0.0:
+                dict_['ss'] = np.nan
+
         id1, id2, id3, id4 = key.split('-')
         dict_['hf'] = dict_['hf'] - \
             trimers[keyName(id1, id2, id3)]['hf'] - trimers[keyName(id1, id2, id4)]['hf'] - \
@@ -1340,6 +1381,67 @@ def remove_additional_mers(dict_):
         if dict_[key]["type"] == "add":
             del dict_[key]
     return dict_
+
+
+def getCuttoffsFromJson(json_data):
+    """Get HF and MP2 cutoffs from json file."""
+
+    cutoff_dims = json_data["keywords"]["frag"].get("dimer_cutoff", 10000) / angstrom2bohr
+    cutoff_trims = json_data["keywords"]["frag"].get("trimer_cutoff", 10000) / angstrom2bohr
+    cutoff_tets = json_data["keywords"]["frag"].get("tetramer_cutoff", 10000) / angstrom2bohr
+
+    return cutoff_dims, cutoff_trims, cutoff_tets
+
+
+def combineEnergiesAndKeys(frags_dict, hf_list, os_list, ss_list):
+    """Combine list of energies with dictionary of frag ids and keys (mine)."""
+
+    # mons = {}
+    # dims = {}
+    # tris = {}
+    # dicts for monomers, dimers, trimers
+    dicts = {1: {}, 2: {}, 3: {}, 4: {}}
+
+    for frag_id, key in frags_dict.items():
+        dicts[len(key.split('-'))][key] = {
+            'hf': hf_list[frag_id],
+            'os': os_list[frag_id],
+            'ss': ss_list[frag_id],
+        }
+    return dicts[1], dicts[2], dicts[3], dicts[4]
+
+
+def readHdf5Energies(filename):
+    """Open and get parts of HDF5 exess restart file."""
+
+    with h5py.File(filename, "r") as f:
+        hf = list(f["frag_energies"]["frag_energies"])
+        os = list(f["frag_os_energies"]["frag_os_energies"])
+        ss = list(f["frag_ss_energies"]["frag_ss_energies"])
+    return hf, os, ss
+
+
+def readFragIdsFromLog(filename):
+    """Read monomers that make up each frag, from:
+      Molecules 1+7463+7460+7385; 0 <- 20
+    """
+
+    d = {}
+    with open(filename, 'r') as r:
+        for line in r:
+            if line.strip():
+                _, mons, _, _, frag_id = line.split()
+                mons = mons.replace(';', '').split('+')
+                frag_id = int(frag_id) - 1  # starts from 1 in log file
+                keyname = keyName(*mons)
+
+                if not d.get(frag_id):
+                    d[frag_id] = keyname
+                else:
+                    # some are in logs twice check if already assigned is expected value
+                    if d[frag_id] != keyname:
+                        print(f"frag id was different than expected: is {d[frag_id]}, expected {keyname}")
+    return d
 
 
 ### TOP LEVEL --------------------------------------------------------
@@ -1434,21 +1536,46 @@ def df_from_logs(
     # GET ENERGIES
     trimers = {}
     tetramers = {}
-    if get_energies == "end":
+
+    if get_energies == "log":
         name = logfile.split('.')
         monomers, dimers, trimers, tetramers = energies_from_mbe_log(logfile)
-        cutoff_dims = json_data["keywords"]["frag"].get("dimer_cutoff", 10000)/angstrom2bohr
-        cutoff_trims = json_data["keywords"]["frag"].get("trimer_cutoff", 10000)/angstrom2bohr
-        cutoff_tets = json_data["keywords"]["frag"].get("tetramer_cutoff", 10000)/angstrom2bohr
-        print("Dimer cutoff:", cutoff_dims)
-        print("Trimer cutoff:", cutoff_trims)
-        print("Tetramer cutoff:", cutoff_tets)
+        cutoff_dims, cutoff_trims, cutoff_tets = getCuttoffsFromJson(json_data)
+        p.print_("name", name)
+
+    elif get_energies == "restart":
+
+        restart_file = glob.glob("*h5")[0]
+        ids_from_log = "frag_ids.txt"
+
+        # read energies
+        hf_energies, os_energies, ss_energies = readHdf5Energies(restart_file)
+
+        # read frag ids
+        keys_of_frag_ids = readFragIdsFromLog(ids_from_log)
+
+        # check length of frags and keys
+        if len(keys_of_frag_ids.keys()) != len(hf_energies):
+            print(f"Length of frags ({len(keys_of_frag_ids.keys())}) does not equal length of HF energies "
+                  f"({len(hf_energies)})")
+        # combine energies
+        monomers, dimers, trimers, tetramers = combineEnergiesAndKeys(keys_of_frag_ids, hf_energies, os_energies,
+                                                                 ss_energies)
+        # contributions from total energies
+        dimers = dimer_contributions(dimers, monomers, np_for_zero=True)
+        trimers = trimer_contributions(trimers, dimers, monomers, np_for_zero=True)
+        tetramers = tetramer_contributions(tetramers, trimers, dimers, monomers, np_for_zero=True)
+
+        # cutoffs
+        cutoff_dims, cutoff_trims, cutoff_tets = getCuttoffsFromJson(json_data)
+
     elif get_energies == "dump":
         name = logfile.split('.')
         fragments = energies_corr_from_log_when_calculated(logfile) # mp2 from start of files
         monomers, dimers, trimers, tetramers = energies_dumped_hf(hf_dump_file, fragments) # hf from h5dump
-    elif get_energies == "manual":
-        name = "output"
+        p.print_("name", name)
+
+    elif get_energies == "separate":
         monomers, dimers = energies_from_sep_mbe_dimers(glob.glob("dimers/*log"), center_ip_id)
 
         # get higher level energies
@@ -1462,8 +1589,10 @@ def df_from_logs(
         dimers = remove_additional_mers(dimers)
         if os.path.isdir("trimers"):
             trimers = remove_additional_mers(trimers)
-    p.print_("name", name)
-    print(monomers)
+
+    print("Dimer cutoff:", cutoff_dims)
+    print("Trimer cutoff:", cutoff_trims)
+    print("Tetramer cutoff:", cutoff_tets)
     p.print_(f"monomers['{center_ip_id}']", monomers[str(center_ip_id)])
 
     if lattice:
@@ -1592,7 +1721,7 @@ def run(value, filename):
 
         if os.path.isdir("dimers"):
             log = None
-            get_energies = "manual"
+            get_energies = "separate"
 
             # cutoffs
             user_ = input("Cutoffs Dimers Trimers Tetramers [None 35 20]: ")
@@ -1601,12 +1730,18 @@ def run(value, filename):
             user_ = user_.replace("None", "10000")
             dim, tri, tet = [float(i) for i in user_.split()]
 
+        elif os.path.exists("frag_ids.txt"):
+            log = None
+            get_energies = "restart"
+            dim, tri, tet = "None", "None", "None"
+
         else:
             log = glob.glob("*.log")[0]
-            get_energies = "end"
+            get_energies = "log"
             dim, tri, tet = "None", "None", "None"
 
         jsn = glob.glob("*.json")[0]
+        print(f"Getting energies: {get_energies}")
         print(f"File used: {jsn}")
         df_from_logs(
             jsonfile=jsn,
