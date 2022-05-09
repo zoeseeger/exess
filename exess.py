@@ -549,14 +549,15 @@ def exess_mbe_template(frag_ids, frag_charges, symbols, geometry, method="RIMP2"
 
 
 def exess_template(symbols, geometry, method="RIMP2", basis="cc-pVDZ", auxbasis="cc-pVDZ-RIFIT"):
-    """RIMP2 template for exess."""
+    """Full ab initio template for exess."""
 
     dict_ = {
         "driver"    : "energy",
         "model"     : {
-            "method": method,
-            "basis"     : basis,
-            "aux_basis" : auxbasis,
+            "method"        : method,
+            "basis"         : basis,
+            "aux_basis"     : auxbasis,
+            "fragmentation" : False
         },
         "keywords"  : {
             "scf"           : {
@@ -564,6 +565,7 @@ def exess_template(symbols, geometry, method="RIMP2", basis="cc-pVDZ", auxbasis=
                 "ndiis"             : 10,
                 "dele"              : 1E-8,
                 "rmsd"              : 1E-8,
+                "dynamic_threshold" : 10,
                 "debug"             : False,
             },
         },
