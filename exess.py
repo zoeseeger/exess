@@ -8,7 +8,7 @@ import glob
 import math
 import json
 import tqdm
-reimport h5py
+import h5py
 import numpy as np
 import pandas as pd
 sys.path.append("/Users/zoes/apps/qcp-python-app/qcp")
