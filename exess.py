@@ -650,6 +650,10 @@ def make_exess_input_from_frag_ids(frag_indexs, fragList, atmList, method="RIMP2
     geometry     = []
     xyz_lines    = []
     num          = 0
+
+    # convert to integers
+    frag_indexs = [int(x) for x in frag_indexs]
+
     # FOR EACH FRAGMENT
     for index in frag_indexs:
         num += 1
@@ -1398,9 +1402,6 @@ def getCuttoffsFromJson(json_data):
 def combineEnergiesAndKeys(frags_dict, hf_list, os_list, ss_list):
     """Combine list of energies with dictionary of frag ids and keys (mine)."""
 
-    # mons = {}
-    # dims = {}
-    # tris = {}
     # dicts for monomers, dimers, trimers
     dicts = {1: {}, 2: {}, 3: {}, 4: {}}
 
@@ -1432,6 +1433,8 @@ def readFragIdsFromLog(filename):
     with open(filename, 'r') as r:
         for line in r:
             if line.strip():
+                if len(line.split()) != 5:
+                    print("Error w line:", line)
                 _, mons, _, _, frag_id = line.split()
                 mons = mons.replace(';', '').split('+')
                 frag_id = int(frag_id) - 1  # starts from 1 in log file
@@ -1444,6 +1447,47 @@ def readFragIdsFromLog(filename):
                     if d[frag_id] != keyname:
                         print(f"frag id was different than expected: is {d[frag_id]}, expected {keyname}")
     return d
+
+
+def checkHdf5CorrelationNan(frags_dict, fragList, atmList, jsonfile):
+    """Check cor energies are not error. Cor energies that were not calculated are 0.0 and nan if error."""
+
+    with open('correlation-nan.txt', 'w') as w:
+        for key, dict_ in frags_dict.items():
+            if np.isnan(dict_['os']):
+                w.write(f"{key}\n")
+                geometryFromListIds(key.split('-'), fragList, atmList, jsonfile, newDir="nan-cor")
+
+
+def suspiciousEnergies(df_data, fragList, atmList, json_):
+    """Check for very large hf and cor energies."""
+
+    with open('suspicious-energies.txt', 'w') as w:
+        for i in range(len(df_data['hf'])):
+
+            if df_data['type'][i] == 'dimer':
+                if abs(df_data['hf'][i]) > 100:
+                    w.write(f'{df_data["ids"][i]} hf {df_data["hf"][i]}\n')
+                    geometryFromListIds(df_data["ids"][i].split('-'), fragList, atmList, json_, newDir="large-hf")
+                elif abs(df_data['srs'][i]) > 20:
+                    w.write(f'{df_data["ids"][i]} cor {df_data["srs"][i]}\n')
+                    geometryFromListIds(df_data["ids"][i].split('-'), fragList, atmList, json_, newDir="large-cor")
+
+            elif df_data['type'][i] == 'trimer':
+                if abs(df_data['hf'][i]) > 10:
+                    w.write(f'{df_data["ids"][i]} hf {df_data["hf"][i]}\n')
+                    geometryFromListIds(df_data["ids"][i].split('-'), fragList, atmList, json_, newDir="large-hf")
+                elif abs(df_data['srs'][i]) > 3:
+                    w.write(f'{df_data["ids"][i]} cor {df_data["srs"][i]}\n')
+                    geometryFromListIds(df_data["ids"][i].split('-'), fragList, atmList, json_, newDir="large-cor")
+
+            elif df_data['type'][i] == 'tetramer':
+                if abs(df_data['hf'][i]) > 0.5:
+                    w.write(f'{df_data["ids"][i]} hf {df_data["hf"][i]}\n')
+                    geometryFromListIds(df_data["ids"][i].split('-'), fragList, atmList, json_, newDir="large-hf")
+                elif abs(df_data['srs'][i]) > 0.1:
+                    w.write(f'{df_data["ids"][i]} cor {df_data["srs"][i]}\n')
+                    geometryFromListIds(df_data["ids"][i].split('-'), fragList, atmList, json_, newDir="large-cor")
 
 
 ### TOP LEVEL --------------------------------------------------------
@@ -1513,6 +1557,10 @@ def df_from_logs(
     p.print_("mbe", mbe)
     p.print_("lattice", lattice)
 
+    # CHECK IS MBE
+    if not mbe:
+        sys.exit('Expected MBE input. exiting ...')
+
     # ADD CENTROIDS - USED FOR CENTRAL IP
     fragList = add_centroids(fragList, atmList)
 
@@ -1563,6 +1611,10 @@ def df_from_logs(
         # combine energies
         monomers, dimers, trimers, tetramers = combineEnergiesAndKeys(keys_of_frag_ids, hf_energies, os_energies,
                                                                  ss_energies)
+
+        # find any correlation nan's which are an error
+        checkHdf5CorrelationNan({**monomers, **dimers, **trimers, **tetramers}, fragList, atmList, jsonfile)
+
         # contributions from total energies
         dimers = dimer_contributions(dimers, monomers, np_for_zero=True)
         trimers = trimer_contributions(trimers, dimers, monomers, np_for_zero=True)
@@ -1595,13 +1647,15 @@ def df_from_logs(
     print("Dimer cutoff:", cutoff_dims)
     print("Trimer cutoff:", cutoff_trims)
     print("Tetramer cutoff:", cutoff_tets)
-    p.print_(f"monomers['{center_ip_id}']", monomers[str(center_ip_id)])
 
     if lattice:
+        p.print_(f"monomers['{center_ip_id}']", monomers[str(center_ip_id)])
+
         # DISTANCE FROM EACH FRAG TO CENTRAL IP
         dimers_dists = distances_to_central_frag(fragList, center_ip_id, cutoff_dims, mers="dimers")
         trimers_dists = distances_to_central_frag(fragList, center_ip_id, cutoff_trims, mers="trimers")
         tetramer_dists = distances_to_central_frag(fragList, center_ip_id, cutoff_tets, mers="tetramers")
+
         # only keep central frag
         monomers = {str(center_ip_id): monomers[str(center_ip_id)]}
 
@@ -1616,6 +1670,9 @@ def df_from_logs(
     p.print_("df_data.keys()", df_data.keys())
     p.print_("df_data", df_data, still_print=False)
     df.to_csv("df.csv", index=False)
+
+    # write very large energies to file
+    suspiciousEnergies(df_data, fragList, atmList, jsonfile)
 
 
 def make_job_from_jsons(num_json_per_job):
@@ -1675,7 +1732,7 @@ def make_smaller_shell_from_json(json_, cutoff):
     write_file("indexes.txt", [str(i) for i in indexes])
 
 
-def geometryFromFragIds(json_, id_list):
+def geometryFromFragIds(json_, id_list, newDir=None):
     """Takes a json mbe file and keeps only frags listed by user."""
 
     # READ JSON
@@ -1688,13 +1745,26 @@ def geometryFromFragIds(json_, id_list):
     if not mbe:
         sys.exit('Expected MBE input. exiting ...')
 
+    geometryFromListIds(id_list, fragList, atmList, json_, mbe, newDir)
+
+
+def geometryFromListIds(id_list, fragList, atmList, jsonfile, mbe=False, newDir=None):
+    """From a list of ids and fragList create new json."""
+
     # NEW MBE
     json_lines, lines = make_exess_input_from_frag_ids(id_list, fragList, atmList, number_checkpoints=0, mbe=mbe)
 
     # WRITE FILES
     ids = '-'.join([str(x) for x in id_list])
-    write_file(json_.replace('.js', f'-{ids}.js'), json_lines)
-    write_xyz(json_.replace('.json', f'-{ids}.xyz'), lines)
+
+    if newDir:
+        if not os.path.exists(newDir):
+            os.mkdir(newDir)
+        write_file(newDir+"/"+jsonfile.replace('.js', f'-{ids}.js'), json_lines)
+        write_xyz(newDir+"/"+jsonfile.replace('.json', f'-{ids}.xyz'), lines)
+    else:
+        write_file(jsonfile.replace('.js', f'-{ids}.js'), json_lines)
+        write_xyz(jsonfile.replace('.json', f'-{ids}.xyz'), lines)
 
 
 def xyz_to_json(filename, mbe, method):

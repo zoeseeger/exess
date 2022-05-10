@@ -5,6 +5,7 @@ cp-gadi.sh
 *xyz
 *csv
 *_
+*cif
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
