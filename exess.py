@@ -11,8 +11,10 @@ import tqdm
 import h5py
 import numpy as np
 import pandas as pd
+
 sys.path.append("/Users/zoes/apps/qcp-python-app/qcp")
 sys.path.append("/g/data/k96/apps/qcp/qcp")
+
 
 ### GENERAL FUNCTIONS --------------------------------------------
 
@@ -22,9 +24,12 @@ class Pprint:
     def __init__(self, to_print):
         self.to_print = to_print
 
-    def print_(self, name, value, still_print=True):
+    def print_(self, name, value=None, still_print=True):
         if self.to_print and still_print:
-            print('%-20s %s' % (name, value))
+            if value:
+                print('%-20s %s' % (name, value))
+            else:
+                print('%-20s' % name)
 
 
 def chunk(list_, n):
@@ -34,23 +39,23 @@ def chunk(list_, n):
         yield list_[i:i + n]
 
 
-def eof(path, File, percFile):
+def eof(path, file, perc):
     """Return percentage end of file as list of lines."""
 
     # OPEN IN BYTES
-    with open(path + File, "rb") as f:
-        f.seek(0, 2)                      # Seek @ EOF
-        fsize = f.tell()                  # Get size
-        Dsize = int(percFile * fsize)
-        f.seek (max (fsize-Dsize, 0), 0)  # Set pos @ last n chars lines
-        lines = f.readlines()             # Read to end
+    with open(path + file, "rb") as f:
+        f.seek(0, 2)  # Seek @ EOF
+        fsize = f.tell()  # Get size
+        Dsize = int(perc * fsize)
+        f.seek(max(fsize - Dsize, 0), 0)  # Set pos @ last n chars lines
+        lines = f.readlines()  # Read to end
     # RETURN DECODED LINES
     for i in range(len(lines)):
         try:
             lines[i] = lines[i].decode("utf-8")
         except:
             lines[i] = "CORRUPTLINE"
-            print("eof function passed a corrupt line in file ", File)
+            print("eof function passed a corrupt line in file ", file)
     return lines
 
 
@@ -58,114 +63,140 @@ def periodicTable():
     """Periodic table."""
 
     return {
-        "H"    :   [1.0, 1.007825       , 0.430],
-        "He"   :   [2.0, 4.0026022      , 0.741],
-        "Li"   :   [3.0, 6.938          , 0.880],
-        "Be"   :   [4.0, 9.01218315     , 0.550],
-        "B"    :   [5.0, 10.806         , 1.030],
-        "C"    :   [6.0, 12.0096        , 0.900],
-        "N"    :   [7.0, 14.00643       , 0.880],
-        "O"    :   [8.0, 15.99491       , 0.880],
-        "F"    :   [9.0, 18.99840316    , 0.840],
-        "Ne"   :   [10.0, 20.17976      , 0.815],
-        "Na"   :   [11.0, 22.98976928   , 1.170],
-        "Mg"   :   [12.0, 24.304        , 1.300],
-        "Al"   :   [13.0, 26.98153857   , 1.550],
-        "Si"   :   [14.0, 28.084        , 1.400],
-        "P"    :   [15.0, 30.973762     , 1.250],
-        "S"    :   [16.0, 32.059        , 1.220],
-        "Cl"   :   [17.0, 35.446        , 1.190],
-        "Ar"   :   [18.0, 39.9481       , 0.995],
-        "K"    :   [19.0, 39.09831      , 1.530],
-        "Ca"   :   [20.0, 40.0784       , 1.190],
-        "Sc"   :   [21.0, 44.9559085    , 1.640],
-        "Ti"   :   [22.0, 47.8671       , 1.670],
-        "V"    :   [23.0, 50.94151      , 1.530],
-        "Cr"   :   [24.0, 51.99616      , 1.550],
-        "Mn"   :   [25.0, 54.9380443    , 1.555],
-        "Fe"   :   [26.0, 55.8452       , 1.540],
-        "Co"   :   [27.0, 58.9331944    , 1.530],
-        "Ni"   :   [28.0, 58.69344      , 1.700],
-        "Cu"   :   [29.0, 63.5463       , 1.720],
-        "Zn"   :   [30.0, 65.382        , 1.650],
-        "Ga"   :   [31.0, 69.7231       , 1.420],
-        "Ge"   :   [32.0, 72.6308       , 1.370],
-        "As"   :   [33.0, 74.9215956    , 1.410],
-        "Se"   :   [34.0, 78.9718       , 1.420],
-        "Br"   :   [35.0, 79.901        , 1.410],
-        "Kr"   :   [36.0, 83.7982       , 1.069],
-        "Rb"   :   [37.0, 85.46783      , 1.670],
-        "Sr"   :   [38.0, 87.621        , 1.320],
-        "Y"    :   [39.0, 88.905842     , 1.980],
-        "Zr"   :   [40.0, 91.2242       , 1.760],
-        "Nb"   :   [41.0, 92.906372     , 1.680],
-        "Mo"   :   [42.0, 95.951        , 1.670],
-        "Tc"   :   [43.0, 98            , 1.550],
-        "Ru"   :   [44.0, 101.072       , 1.600],
-        "Rh"   :   [45.0, 102.905502    , 1.650],
-        "Pd"   :   [46.0, 106.421       , 1.700],
-        "Ag"   :   [47.0, 107.86822     , 1.790],
-        "Cd"   :   [48.0, 112.4144      , 1.890],
-        "In"   :   [49.0, 114.8181      , 1.830],
-        "Sn"   :   [50.0, 118.7107      , 1.660],
-        "Sb"   :   [51.0, 121.7601      , 1.660],
-        "Te"   :   [52.0, 127.603       , 1.670],
-        "I"    :   [53.0, 126.9045      , 1.600],
-        "Xe"   :   [54.0, 131.2936      , 1.750],
-        "Cs"   :   [55.0, 132.90545     , 1.870],
-        "Ba"   :   [56.0, 137.3277      , 1.540],
-        "La"   :   [57.0, 138.9055      , 2.070],
-        "Ce"   :   [58.0, 140.1161      , 2.030],
-        "Pr"   :   [59.0, 140.9077      , 2.020],
-        "Nd"   :   [60.0, 144.242       , 2.010],
-        "Pm"   :   [61.0, 145           , 2.000],
-        "Sm"   :   [62.0, 150.362       , 2.000],
-        "Eu"   :   [63.0, 151.9641      , 2.190],
-        "Gd"   :   [64.0, 157.253       , 1.990],
-        "Tb"   :   [65.0, 158.9253      , 1.960],
-        "Dy"   :   [66.0, 162.5001      , 1.950],
-        "Ho"   :   [67.0, 164.930       , 1.940],
-        "Er"   :   [68.0, 167.2593      , 1.930],
-        "Tm"   :   [69.0, 00.0000       , 1.920],
-        "Yb"   :   [70.0, 00.0000       , 2.140],
-        "Lu"   :   [71.0, 00.0000       , 1.920],
-        "Hf"   :   [72.0, 00.0000       , 1.770],
-        "Ta"   :   [73.0, 00.0000       , 1.630],
-        "W"    :   [74.0, 00.0000       , 1.570],
-        "Re"   :   [75.0, 00.0000       , 1.550],
-        "Os"   :   [76.0, 00.0000       , 1.570],
-        "Ir"   :   [77.0, 00.0000       , 1.520],
-        "Pt"   :   [78.0, 00.0000       , 1.700],
-        "Au"   :   [79.0, 00.0000       , 1.700],
-        "Hg"   :   [80.0,200.5923       , 1.900],
-        "Tl"   :   [81.0, 00.0000       , 1.750],
-        "Pb"   :   [82.0, 00.0000       , 1.740],
-        "Bi"   :   [83.0, 00.0000       , 1.740],
-        "Po"   :   [84.0, 00.0000       , 1.880],
-        "At"   :   [85.0, 00.0000       , 0.200],
-        "Rn"   :   [86.0, 00.0000       , 0.200],
-        "Fr"   :   [87.0, 00.0000       , 0.200],
-        "Ra"   :   [88.0, 00.0000       , 2.100],
-        "Ac"   :   [89.0, 00.0000       , 2.080],
-        "Th"   :   [90.0, 00.0000       , 1.990],
-        "Pa"   :   [91.0, 00.0000       , 1.810],
-        "U"    :   [92.0, 00.0000       , 1.780],
-        "Np"   :   [93.0, 00.0000       , 1.750],
-        "Pu"   :   [94.0, 00.0000       , 0.200],
-        "Am"   :   [95.0, 00.0000       , 1.710],
-        "Cm"   :   [96.0, 00.0000       , 0.200],
-        "Bk"   :   [97.0, 00.0000       , 0.200],
-        "Cf"   :   [98.0, 00.0000       , 1.730],
-        "Es"   :   [99.0, 00.0000       , 0.100],
-        "Fm"   :   [100.0, 00.0000      , 0.200],
+        "H": [1.0, 1.007825, 0.430],
+        "He": [2.0, 4.0026022, 0.741],
+        "Li": [3.0, 6.938, 0.880],
+        "Be": [4.0, 9.01218315, 0.550],
+        "B": [5.0, 10.806, 1.030],
+        "C": [6.0, 12.0096, 0.900],
+        "N": [7.0, 14.00643, 0.880],
+        "O": [8.0, 15.99491, 0.880],
+        "F": [9.0, 18.99840316, 0.840],
+        "Ne": [10.0, 20.17976, 0.815],
+        "Na": [11.0, 22.98976928, 1.170],
+        "Mg": [12.0, 24.304, 1.300],
+        "Al": [13.0, 26.98153857, 1.550],
+        "Si": [14.0, 28.084, 1.400],
+        "P": [15.0, 30.973762, 1.250],
+        "S": [16.0, 32.059, 1.220],
+        "Cl": [17.0, 35.446, 1.190],
+        "Ar": [18.0, 39.9481, 0.995],
+        "K": [19.0, 39.09831, 1.530],
+        "Ca": [20.0, 40.0784, 1.190],
+        "Sc": [21.0, 44.9559085, 1.640],
+        "Ti": [22.0, 47.8671, 1.670],
+        "V": [23.0, 50.94151, 1.530],
+        "Cr": [24.0, 51.99616, 1.550],
+        "Mn": [25.0, 54.9380443, 1.555],
+        "Fe": [26.0, 55.8452, 1.540],
+        "Co": [27.0, 58.9331944, 1.530],
+        "Ni": [28.0, 58.69344, 1.700],
+        "Cu": [29.0, 63.5463, 1.720],
+        "Zn": [30.0, 65.382, 1.650],
+        "Ga": [31.0, 69.7231, 1.420],
+        "Ge": [32.0, 72.6308, 1.370],
+        "As": [33.0, 74.9215956, 1.410],
+        "Se": [34.0, 78.9718, 1.420],
+        "Br": [35.0, 79.901, 1.410],
+        "Kr": [36.0, 83.7982, 1.069],
+        "Rb": [37.0, 85.46783, 1.670],
+        "Sr": [38.0, 87.621, 1.320],
+        "Y": [39.0, 88.905842, 1.980],
+        "Zr": [40.0, 91.2242, 1.760],
+        "Nb": [41.0, 92.906372, 1.680],
+        "Mo": [42.0, 95.951, 1.670],
+        "Tc": [43.0, 98, 1.550],
+        "Ru": [44.0, 101.072, 1.600],
+        "Rh": [45.0, 102.905502, 1.650],
+        "Pd": [46.0, 106.421, 1.700],
+        "Ag": [47.0, 107.86822, 1.790],
+        "Cd": [48.0, 112.4144, 1.890],
+        "In": [49.0, 114.8181, 1.830],
+        "Sn": [50.0, 118.7107, 1.660],
+        "Sb": [51.0, 121.7601, 1.660],
+        "Te": [52.0, 127.603, 1.670],
+        "I": [53.0, 126.9045, 1.600],
+        "Xe": [54.0, 131.2936, 1.750],
+        "Cs": [55.0, 132.90545, 1.870],
+        "Ba": [56.0, 137.3277, 1.540],
+        "La": [57.0, 138.9055, 2.070],
+        "Ce": [58.0, 140.1161, 2.030],
+        "Pr": [59.0, 140.9077, 2.020],
+        "Nd": [60.0, 144.242, 2.010],
+        "Pm": [61.0, 145, 2.000],
+        "Sm": [62.0, 150.362, 2.000],
+        "Eu": [63.0, 151.9641, 2.190],
+        "Gd": [64.0, 157.253, 1.990],
+        "Tb": [65.0, 158.9253, 1.960],
+        "Dy": [66.0, 162.5001, 1.950],
+        "Ho": [67.0, 164.930, 1.940],
+        "Er": [68.0, 167.2593, 1.930],
+        "Tm": [69.0, 00.0000, 1.920],
+        "Yb": [70.0, 00.0000, 2.140],
+        "Lu": [71.0, 00.0000, 1.920],
+        "Hf": [72.0, 00.0000, 1.770],
+        "Ta": [73.0, 00.0000, 1.630],
+        "W": [74.0, 00.0000, 1.570],
+        "Re": [75.0, 00.0000, 1.550],
+        "Os": [76.0, 00.0000, 1.570],
+        "Ir": [77.0, 00.0000, 1.520],
+        "Pt": [78.0, 00.0000, 1.700],
+        "Au": [79.0, 00.0000, 1.700],
+        "Hg": [80.0, 200.5923, 1.900],
+        "Tl": [81.0, 00.0000, 1.750],
+        "Pb": [82.0, 00.0000, 1.740],
+        "Bi": [83.0, 00.0000, 1.740],
+        "Po": [84.0, 00.0000, 1.880],
+        "At": [85.0, 00.0000, 0.200],
+        "Rn": [86.0, 00.0000, 0.200],
+        "Fr": [87.0, 00.0000, 0.200],
+        "Ra": [88.0, 00.0000, 2.100],
+        "Ac": [89.0, 00.0000, 2.080],
+        "Th": [90.0, 00.0000, 1.990],
+        "Pa": [91.0, 00.0000, 1.810],
+        "U": [92.0, 00.0000, 1.780],
+        "Np": [93.0, 00.0000, 1.750],
+        "Pu": [94.0, 00.0000, 0.200],
+        "Am": [95.0, 00.0000, 1.710],
+        "Cm": [96.0, 00.0000, 0.200],
+        "Bk": [97.0, 00.0000, 0.200],
+        "Cf": [98.0, 00.0000, 1.730],
+        "Es": [99.0, 00.0000, 0.100],
+        "Fm": [100.0, 00.0000, 0.200],
     }
+
+
+def getAllKeys(*args):
+    """For a key get all contrtibuting frags."""
+
+    mons = [str(i) for i in [*args]]
+    frags = [*mons]
+
+    # dims
+    if len(mons) > 1:
+        for i in range(len(mons)-1):
+            for j in range(i+1, len(mons)):
+                frags.append(keyName(mons[i], mons[j]))
+
+    # tris
+    if len(mons) > 2:
+        for i in range(len(mons)-2):
+            for j in range(i+1, len(mons)-1):
+                for k in range(j+1, len(mons)):
+                    frags.append(keyName(mons[i], mons[j], mons[k]))
+
+    # tet
+    if len(mons) == 4:
+        frags.append(keyName(*mons))
+
+    return frags
 
 
 def keyName(*args):
     """Sort values in order and separate by hyphen - used as a unique key."""
 
-    a = [int(i) for i in [*args]] # make sure all ints
-    a = [str(i) for i in sorted(a)] # sort ints and then return strings
+    a = [int(i) for i in [*args]]  # make sure all ints
+    a = [str(i) for i in sorted(a)]  # sort ints and then return strings
     return '-'.join(a)
 
 
@@ -180,13 +211,13 @@ osvtz2srs = 1.64
 def midpoint(list_):
     """Return midpoint between a list of values in 1D."""
 
-    return np.min(list_) + (np.max(list_) - np.min(list_))/2
+    return np.min(list_) + (np.max(list_) - np.min(list_)) / 2
 
 
 def distance(x1, y1, z1, x2, y2, z2):
     """Return distance between 2 points. Inputs are 6 floats."""
 
-    return math.sqrt((x1-x2)**2 + (y1-y2)**2 + (z1-z2)**2)
+    return math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2 + (z1 - z2) ** 2)
 
 
 def add_centroids(frag_list, atm_list):
@@ -200,9 +231,9 @@ def add_centroids(frag_list, atm_list):
             y += atm["y"]
             z += atm["z"]
             i += 1
-        frag['cx'] = x/i
-        frag['cy'] = y/i
-        frag['cz'] = z/i
+        frag['cx'] = x / i
+        frag['cy'] = y / i
+        frag['cz'] = z / i
 
     return frag_list
 
@@ -223,13 +254,13 @@ def central_frag(frag_list, midpointx, midpointy, midpointz):
     distance to the centroid for each fragment."""
 
     min_dist = 10000
-    min_ion  = None
+    min_ion = None
     for frag in frag_list:
         dist = distance(midpointx, midpointy, midpointz,
-                         frag['cx'], frag['cy'], frag['cz'])
+                        frag['cx'], frag['cy'], frag['cz'])
         if dist < min_dist:
-            min_dist  = dist
-            min_ion   = frag['grp']
+            min_dist = dist
+            min_ion = frag['grp']
     return min_ion
 
 
@@ -239,31 +270,55 @@ def distances_between_frags(fragList, cutoff, mers="dimers"):
     dists_list = []
 
     if mers == "dimers":
-        for i in range(len(fragList)-1):
+        for i in range(len(fragList) - 1):
             frag1 = fragList[i]
-            for j in range(i+1, len(fragList)):
+            for j in range(i + 1, len(fragList)):
                 frag2 = fragList[j]
                 r1 = distance(frag1['cx'], frag1['cy'], frag1['cz'], frag2['cx'], frag2['cy'], frag2['cz'])
                 if r1 < cutoff:
                     dists_list.append([r1, None, None, None, None, None, None, r1, keyName(frag1["grp"], frag2["grp"])])
 
     elif mers == "trimers":
-        for i in range(len(fragList)-2):
+        for i in range(len(fragList) - 2):
             frag1 = fragList[i]
-            for j in range(i+1, len(fragList)-1):
+            for j in range(i + 1, len(fragList) - 1):
                 frag2 = fragList[j]
                 r1 = distance(frag1['cx'], frag1['cy'], frag1['cz'], frag2['cx'], frag2['cy'], frag2['cz'])
                 if r1 < cutoff:
-                    for k in range(j+1, len(fragList)):
+                    for k in range(j + 1, len(fragList)):
                         frag3 = fragList[k]
                         r2 = distance(frag1['cx'], frag1['cy'], frag1['cz'], frag3['cx'], frag3['cy'], frag3['cz'])
                         r3 = distance(frag2['cx'], frag2['cy'], frag2['cz'], frag3['cx'], frag3['cy'], frag3['cz'])
                         if r2 < cutoff and r3 < cutoff:
                             dmax = max(r1, r2, r3)
                             dist = (r1 + r2 + r3) / 3
-                            dists_list.append([dist, r1, r2, r3, None, None, None, dmax, keyName(frag1["grp"], frag2["grp"], frag3["grp"])])
+                            dists_list.append([dist, r1, r2, r3, None, None, None, dmax,
+                                               keyName(frag1["grp"], frag2["grp"], frag3["grp"])])
 
-    return sorted(dists_list, key=lambda x:x[0])
+    elif mers == "tetramers":
+        for i in range(len(fragList) - 3):
+            frag1 = fragList[i]
+            for j in range(i + 1, len(fragList) - 2):
+                frag2 = fragList[j]
+                r1 = distance(frag1['cx'], frag1['cy'], frag1['cz'], frag2['cx'], frag2['cy'], frag2['cz'])
+                if r1 < cutoff:
+                    for k in range(j + 1, len(fragList) - 1):
+                        frag3 = fragList[k]
+                        r2 = distance(frag1['cx'], frag1['cy'], frag1['cz'], frag3['cx'], frag3['cy'], frag3['cz'])
+                        r3 = distance(frag2['cx'], frag2['cy'], frag2['cz'], frag3['cx'], frag3['cy'], frag3['cz'])
+                        if r2 < cutoff and r3 < cutoff:
+                            for l in range(k + 1, len(fragList)):
+                                frag4 = fragList[l]
+                                r4 = distance(frag1['cx'], frag1['cy'], frag1['cz'], frag4['cx'], frag4['cy'], frag4['cz'])
+                                r5 = distance(frag2['cx'], frag2['cy'], frag2['cz'], frag4['cx'], frag4['cy'], frag4['cz'])
+                                r6 = distance(frag3['cx'], frag3['cy'], frag3['cz'], frag4['cx'], frag4['cy'], frag4['cz'])
+                                if (r4 < cutoff and r5 < cutoff) and r6 < cutoff:
+                                    dmax = max(r1, r2, r3, r4, r5, r6)
+                                    dist = (r1 + r2 + r3 + r4 + r5 + r6) / 6
+                                    dists_list.append([dist, r1, r2, r3, r4, r5, r6, dmax,
+                                                       keyName(frag1["grp"], frag2["grp"], frag3["grp"], frag4["grp"])])
+
+    return sorted(dists_list, key=lambda x: x[0])
 
 
 def distances_to_central_frag(fragList, center_ip_id, cutoff, mers="dimers"):
@@ -282,13 +337,14 @@ def distances_to_central_frag(fragList, center_ip_id, cutoff, mers="dimers"):
             dist = fragList[i]['dist']
 
             # ADD TO LIST [dist, grp]
-            dists_list.append([dist, None, None, None, None, None, None, dist, keyName(fragList[i]["grp"], center_ip_id)])
+            dists_list.append(
+                [dist, None, None, None, None, None, None, dist, keyName(fragList[i]["grp"], center_ip_id)])
 
     elif mers == "trimers":
 
         for i in range(len(frags_cutoff)):
             frag1 = fragList[frags_cutoff[i]]
-            for j in range(i+1, len(frags_cutoff)):
+            for j in range(i + 1, len(frags_cutoff)):
                 frag2 = fragList[frags_cutoff[j]]
                 r3 = distance(frag1['cx'], frag1['cy'], frag1['cz'], frag2['cx'], frag2['cy'], frag2['cz'])
                 if r3 < cutoff:
@@ -296,17 +352,18 @@ def distances_to_central_frag(fragList, center_ip_id, cutoff, mers="dimers"):
                     r2 = frag2["dist"]
                     dist = (r1 + r2 + r3) / 3
                     dmax = max(r1, r2)
-                    dists_list.append([dist, r1, r2, r3, None, None, None, dmax, keyName(frag1["grp"], frag2["grp"], center_ip_id)])
+                    dists_list.append(
+                        [dist, r1, r2, r3, None, None, None, dmax, keyName(frag1["grp"], frag2["grp"], center_ip_id)])
 
     elif mers == "tetramers":
 
         for i in range(len(frags_cutoff)):
             frag1 = fragList[frags_cutoff[i]]
-            for j in range(i+1, len(frags_cutoff)):
+            for j in range(i + 1, len(frags_cutoff)):
                 frag2 = fragList[frags_cutoff[j]]
                 r4 = distance(frag1['cx'], frag1['cy'], frag1['cz'], frag2['cx'], frag2['cy'], frag2['cz'])
                 if r4 < cutoff:
-                    for k in range(j+1, len(frags_cutoff)):
+                    for k in range(j + 1, len(frags_cutoff)):
                         frag3 = fragList[frags_cutoff[k]]
                         r5 = distance(frag1['cx'], frag1['cy'], frag1['cz'], frag3['cx'], frag3['cy'], frag3['cz'])
                         r6 = distance(frag2['cx'], frag2['cy'], frag2['cz'], frag3['cx'], frag3['cy'], frag3['cz'])
@@ -314,11 +371,12 @@ def distances_to_central_frag(fragList, center_ip_id, cutoff, mers="dimers"):
                             r1 = frag1["dist"]
                             r2 = frag2["dist"]
                             r3 = frag3["dist"]
-                            dist = ( r1 + r2 + r3 + r4 + r5 + r6 ) / 6
+                            dist = (r1 + r2 + r3 + r4 + r5 + r6) / 6
                             dmax = max(r1, r2, r3)
-                            dists_list.append([dist, r1, r2, r3, r4, r5, r6, dmax, keyName(frag1["grp"], frag2["grp"], frag3["grp"], center_ip_id)])
+                            dists_list.append([dist, r1, r2, r3, r4, r5, r6, dmax,
+                                               keyName(frag1["grp"], frag2["grp"], frag3["grp"], center_ip_id)])
 
-    return sorted(dists_list, key=lambda x:x[0])
+    return sorted(dists_list, key=lambda x: x[0])
 
 
 def central_frag_with_charge(frag_list, atmList, midpointx, midpointy, midpointz, charge=0):
@@ -326,7 +384,7 @@ def central_frag_with_charge(frag_list, atmList, midpointx, midpointy, midpointz
     distance to the midpoint for each fragment."""
 
     min_dist = 10000
-    min_ion  = None
+    min_ion = None
     for frag in frag_list:
         if frag['chrg'] == charge:
             dist = 0
@@ -338,8 +396,8 @@ def central_frag_with_charge(frag_list, atmList, midpointx, midpointy, midpointz
             dist = dist / len(frag['ids'])
             # IF SMALLEST DIST
             if dist < min_dist:
-                min_dist  = dist
-                min_ion   = frag['grp']
+                min_dist = dist
+                min_ion = frag['grp']
     return min_ion
 
 
@@ -348,9 +406,9 @@ def add_two_frags_together(fragList, atm_list, frag1_id, frag2_id):
 
     new_id = min(frag1_id, frag2_id)
     other_id = max(frag1_id, frag2_id)
-    new_fragList = fragList[:new_id] # copy up to the combined one
+    new_fragList = fragList[:new_id]  # copy up to the combined one
 
-    new_frag = { # combined frag
+    new_frag = {  # combined frag
         'ids': fragList[frag1_id]['ids'] + fragList[frag2_id]['ids'],
         'syms': fragList[frag1_id]['syms'] + fragList[frag2_id]['syms'],
         'grp': new_id,
@@ -361,15 +419,15 @@ def add_two_frags_together(fragList, atm_list, frag1_id, frag2_id):
 
     new_frag = add_centroids([new_frag], atm_list)
 
-    new_fragList.extend(new_frag) # add new frag
+    new_fragList.extend(new_frag)  # add new frag
 
     # add up to removed frag
-    new_fragList.extend(fragList[new_id+1:other_id])
+    new_fragList.extend(fragList[new_id + 1:other_id])
 
     # change rest of values
-    for i in range(other_id+1,len(fragList)):
-        fragList[i]['grp'] = i-1
-        fragList[i]['name'] = f"frag{i-1}"
+    for i in range(other_id + 1, len(fragList)):
+        fragList[i]['grp'] = i - 1
+        fragList[i]['name'] = f"frag{i - 1}"
         new_fragList.append(fragList[i])
 
     for i in range(len(new_fragList)):
@@ -412,34 +470,34 @@ def read_json(filename):
 def json_to_frags(json_data):
     """Convert exess input to atoms and frags data."""
 
-    atmList  = []
+    atmList = []
     fragList = []
-    totChrg  = 0
-    totMult  = 0
-    pTable   = periodicTable()
-    mbe      = False
-    lattice  = False
-
+    totChrg = 0
+    totMult = 0
+    pTable = periodicTable()
+    mbe = False
+    lattice = False
+    level = None
 
     if json_data['model'].get('fragmentation'):
         mbe = True
         if json_data["keywords"]["frag"].get("lattice_energy_calc"):
-            lattice = True
-
+            lattice = json_data["keywords"]["frag"].get("lattice_energy_calc")
+        level = json_data["keywords"]["frag"].get("level")
 
     # FROM JSON
-    symbols  = json_data["molecule"]["symbols"]
+    symbols = json_data["molecule"]["symbols"]
     geometry = json_data["molecule"]["geometry"]
 
     if mbe:
         frag_ids = json_data["molecule"]["fragments"]["fragid"]
-        nfrags   = json_data["molecule"]["fragments"]["nfrag"]
+        nfrags = json_data["molecule"]["fragments"]["nfrag"]
         charges = json_data["molecule"]["fragments"]["fragment_charges"]
         # broken  = json_data["molecule"]["fragments"]["broken_bonds"]
     else:
         frag_ids = [1] * len(symbols)
-        nfrags   = 1
-        charges  = [0]
+        nfrags = 1
+        charges = [0]
 
     # SPLIT GEOMETRY INTO LIST OF [X, Y, Z]
     coords = list(chunk(geometry, 3))
@@ -447,84 +505,85 @@ def json_to_frags(json_data):
     # MAKE EMPTY fragList ORDERED BY GROUP
     for i in range(nfrags):
         fragList.append({
-            'ids'  : [],
-            'syms' : [],
-            'grp'  : i,
-            'chrg' : charges[i],
-            'mult' : 1,
-            'name' : "frag"+str(i),
+            'ids': [],
+            'syms': [],
+            'grp': i,
+            'chrg': charges[i],
+            'mult': 1,
+            'name': "frag" + str(i),
         })
         totChrg += charges[i]
 
     # MAKE atmList ORDERED BY APPEARANCE
     for i in range(len(frag_ids)):
-        grp = int(frag_ids[i])-1
+        grp = int(frag_ids[i]) - 1
         atmDict = {
             # 'id'  : i,
-            'x'   : float(coords[i][0]),
-            'y'   : float(coords[i][1]),
-            'z'   : float(coords[i][2]),
-            'sym' : symbols[i],
-            'grp' : grp,
+            'x': float(coords[i][0]),
+            'y': float(coords[i][1]),
+            'z': float(coords[i][2]),
+            'sym': symbols[i],
+            'grp': grp,
         }
         for sym, data in pTable.items():
-            if atmDict["sym"]  == sym:
-                atmDict["nu"]  = data[0]
+            if atmDict["sym"] == sym:
+                atmDict["nu"] = data[0]
                 atmDict["mas"] = data[1]
                 atmDict["vdw"] = data[2]
         atmList.append(atmDict)
         fragList[grp]['ids'].append(i)
         fragList[grp]['syms'].append(symbols[i])
 
-    return fragList, atmList, totChrg, totMult, mbe, lattice
+    return fragList, atmList, totChrg, totMult, mbe, lattice, level
 
 
-def exess_mbe_template(frag_ids, frag_charges, symbols, geometry, method="RIMP2", nfrag_stop=None, basis="cc-pVDZ", auxbasis="cc-pVDZ-RIFIT", number_checkpoints=3, ref_mon=0):
+def exess_mbe_template(frag_ids, frag_charges, symbols, geometry, method="RIMP2", nfrag_stop=None, basis="cc-pVDZ",
+                       auxbasis="cc-pVDZ-RIFIT", number_checkpoints=3, ref_mon=0):
     """Json many body energy exess template."""
 
     # FRAGS
     mons = len(frag_charges)
-    total_frags = int(mons+mons*(mons-1)/2)
+    total_frags = int(mons + mons * (mons - 1) / 2)
 
     if not nfrag_stop:
         nfrag_stop = total_frags
 
     # CHECKPOINTING
     ncheck = number_checkpoints + 1
-    ncheck = int((mons+ncheck)/ncheck)
+    ncheck = int((mons + ncheck) / ncheck)
 
     if number_checkpoints == 0:
         to_checkpoint = False
 
     dict_ = {
-        "driver"    : "energy",
-        "model"     : {
-            "method"        : method,
-            "basis"         : basis,
-            "aux_basis"     : auxbasis,
-            "fragmentation" : True
+        "driver": "energy",
+        "model": {
+            "method": method,
+            "basis": basis,
+            "aux_basis": auxbasis,
+            "fragmentation": True
         },
-        "keywords"  : {
-            "scf"           : {
-                "niter"             : 100,
-                "ndiis"             : 10,
-                "dele"              : 1E-8,
-                "rmsd"              : 1E-8,
-                "dynamic_threshold" : 10,
-                "debug"             : False,
+        "keywords": {
+            "scf": {
+                "niter": 100,
+                "ndiis": 10,
+                "dele": 1E-8,
+                "rmsd": 1E-8,
+                "dynamic_threshold": 10,
+                "debug": False,
             },
             "frag": {
-                "method"                : "MBE",
-                "level"                 : 4,
-                "ngpus_per_group"       : 4,
-                "lattice_energy_calc"   : True,
-                "reference_monomer"     : ref_mon,
-                "dimer_cutoff"          : 1000*angstrom2bohr,
-                "dimer_mp2_cutoff"      : 20*angstrom2bohr,
-                "trimer_cutoff"         : 40*angstrom2bohr,
-                "trimer_mp2_cutoff"     : 20*angstrom2bohr,
-                "tetramer_cutoff"       : 25*angstrom2bohr,
-                "tetramer_mp2_cutoff"   : 10*angstrom2bohr
+                "method": "MBE",
+                "level": 4,
+                "ngpus_per_group": 4,
+                "lattice_energy_calc": True,
+                "reference_monomer": ref_mon,
+                "dimer_cutoff": 1000 * angstrom2bohr,
+                "dimer_mp2_cutoff": 20 * angstrom2bohr,
+                "trimer_cutoff": 40 * angstrom2bohr,
+                "trimer_mp2_cutoff": 20 * angstrom2bohr,
+                "tetramer_cutoff": 25 * angstrom2bohr,
+                "tetramer_mp2_cutoff": 10 * angstrom2bohr
             },
             "check_rst": {
                 "checkpoint": to_checkpoint,
@@ -533,15 +592,15 @@ def exess_mbe_template(frag_ids, frag_charges, symbols, geometry, method="RIMP2"
                 "nfrag_stop": min(nfrag_stop, total_frags)
             }
         },
-        "molecule"  : {
-            "fragments"     : {
-                "nfrag"             : len(frag_charges),
-                "fragid"            : frag_ids,
-                "fragment_charges"  : frag_charges,
-                "broken_bonds"      : [],
+        "molecule": {
+            "fragments": {
+                "nfrag": len(frag_charges),
+                "fragid": frag_ids,
+                "fragment_charges": frag_charges,
+                "broken_bonds": [],
             },
-            "symbols"       : symbols,
-            "geometry"      : geometry,
+            "symbols": symbols,
+            "geometry": geometry,
         },
     }
 
@@ -552,26 +611,26 @@ def exess_template(symbols, geometry, method="RIMP2", basis="cc-pVDZ", auxbasis=
     """Full ab initio template for exess."""
 
     dict_ = {
-        "driver"    : "energy",
-        "model"     : {
-            "method"        : method,
-            "basis"         : basis,
-            "aux_basis"     : auxbasis,
-            "fragmentation" : False
+        "driver": "energy",
+        "model": {
+            "method": method,
+            "basis": basis,
+            "aux_basis": auxbasis,
+            "fragmentation": False
         },
-        "keywords"  : {
-            "scf"           : {
-                "niter"             : 100,
-                "ndiis"             : 10,
-                "dele"              : 1E-8,
-                "rmsd"              : 1E-8,
-                "dynamic_threshold" : 10,
-                "debug"             : False,
+        "keywords": {
+            "scf": {
+                "niter": 100,
+                "ndiis": 10,
+                "dele": 1E-8,
+                "rmsd": 1E-8,
+                "dynamic_threshold": 10,
+                "debug": False,
             },
         },
-        "molecule"  : {
-            "symbols"       : symbols,
-            "geometry"      : geometry,
+        "molecule": {
+            "symbols": symbols,
+            "geometry": geometry,
         },
     }
 
@@ -587,7 +646,7 @@ def format_json_input_file(dict_):
     newlines = []
     list_ = False
     geometry_ = False
-    list_lines =  []
+    list_lines = []
     for line in lines.split('\n'):
 
         if "]" in line and not '[]' in line:
@@ -641,15 +700,16 @@ def format_json_input_file(dict_):
     return newlines
 
 
-def make_exess_input_from_frag_ids(frag_indexs, fragList, atmList, method="RIMP2", nfrag_stop=None, basis="cc-pVDZ", auxbasis="cc-pVDZ-RIFIT", number_checkpoints=3, mbe=False, ref_mon=0):
+def make_exess_input_from_frag_ids(frag_indexs, fragList, atmList, method="RIMP2", nfrag_stop=None, basis="cc-pVDZ",
+                                   auxbasis="cc-pVDZ-RIFIT", number_checkpoints=3, mbe=False, ref_mon=0):
     """Make exess input from frag indexes and fraglist."""
 
-    symbols      = []
-    frag_ids     = []
+    symbols = []
+    frag_ids = []
     frag_charges = []
-    geometry     = []
-    xyz_lines    = []
-    num          = 0
+    geometry = []
+    xyz_lines = []
+    num = 0
 
     # convert to integers
     frag_indexs = [int(x) for x in frag_indexs]
@@ -666,7 +726,8 @@ def make_exess_input_from_frag_ids(frag_indexs, fragList, atmList, method="RIMP2
             xyz_lines.append(f"{atmList[id]['sym']} {atmList[id]['x']} {atmList[id]['y']} {atmList[id]['z']}\n")
     # TO JSON
     if mbe:
-        json_dict = exess_mbe_template(frag_ids, frag_charges, symbols, geometry, method, nfrag_stop, basis, auxbasis, number_checkpoints, ref_mon=ref_mon)
+        json_dict = exess_mbe_template(frag_ids, frag_charges, symbols, geometry, method, nfrag_stop, basis, auxbasis,
+                                       number_checkpoints, ref_mon=ref_mon)
     else:
         json_dict = exess_template(symbols, geometry, method, basis, auxbasis)
     json_lines = format_json_input_file(json_dict)
@@ -760,7 +821,8 @@ def write_job_from_list(path, name, inputfile_list):
     write_file(f"{path}/{name}.job", lines)
 
 
-def write_xxmers(fragList, atmList, center_ip_id, method="RIMP2", typ="dimers", num_json_per_job=120, cutoff_central=None, cutoff_all=None):
+def write_xxmers(fragList, atmList, center_ip_id, method="RIMP2", typ="dimers", num_json_per_job=120,
+                 cutoff_central=None, cutoff_all=None):
     """Write json for each dimer/trimer with central ion pair."""
 
     dry_run = False
@@ -783,7 +845,8 @@ def write_xxmers(fragList, atmList, center_ip_id, method="RIMP2", typ="dimers", 
         else:
             name = f"add-{keyName(*indexes)}"
         if not dry_run:
-            json_lines, lines = make_exess_input_from_frag_ids(indexes, fragList, atmList, method=method, number_checkpoints=0, mbe=mbe)
+            json_lines, lines = make_exess_input_from_frag_ids(indexes, fragList, atmList, method=method,
+                                                               number_checkpoints=0, mbe=mbe)
             write_file(f"{typ}/{name}.json", json_lines)
             # write_xyz(f"{typ}/{name}.xyz", lines)
         inputs.append(f"{name}.json")
@@ -799,8 +862,8 @@ def write_xxmers(fragList, atmList, center_ip_id, method="RIMP2", typ="dimers", 
             frags_cutoff_all.append(i)
 
     print("Type:", typ)
-    print("Ion pairs in", cutoff_central, ":", len(frags_cutoff_central)+1)
-    print("Ion pairs in", cutoff_all, ":", len(frags_cutoff_all)+1)
+    print("Ion pairs in", cutoff_central, ":", len(frags_cutoff_central) + 1)
+    print("Ion pairs in", cutoff_all, ":", len(frags_cutoff_all) + 1)
     print("Ion pairs in cutoff_central", ":", frags_cutoff_central)
     print("Ion pairs in cutoff_all", ":", frags_cutoff_all)
 
@@ -815,8 +878,9 @@ def write_xxmers(fragList, atmList, center_ip_id, method="RIMP2", typ="dimers", 
 
         # DIMERS WITH ALL
         for i in tqdm.tqdm(range(len(frags_cutoff_all))):
-            for j in range(i+1, len(frags_cutoff_all)):
-                inputs = write_json([frags_cutoff_all[i], frags_cutoff_all[j]], False, fragList, atmList, typ, inputs, True)
+            for j in range(i + 1, len(frags_cutoff_all)):
+                inputs = write_json([frags_cutoff_all[i], frags_cutoff_all[j]], False, fragList, atmList, typ, inputs,
+                                    True)
 
     elif typ == "trimers":
 
@@ -824,14 +888,16 @@ def write_xxmers(fragList, atmList, center_ip_id, method="RIMP2", typ="dimers", 
 
         # TRIMERS WITH CENTRAL IP
         for i in tqdm.tqdm(range(len(frags_cutoff_central))):
-            for j in range(i+1, len(frags_cutoff_central)):
-                inputs = write_json([frags_cutoff_central[i], frags_cutoff_central[j], center_ip_id], True, fragList, atmList, typ, inputs, False)
+            for j in range(i + 1, len(frags_cutoff_central)):
+                inputs = write_json([frags_cutoff_central[i], frags_cutoff_central[j], center_ip_id], True, fragList,
+                                    atmList, typ, inputs, False)
 
         # TRIMERS WITH ALL
         for i in tqdm.tqdm(range(len(frags_cutoff_all))):
-            for j in range(i+1, len(frags_cutoff_all)):
-                for k in range(j+1, len(frags_cutoff_all)):
-                    inputs = write_json([frags_cutoff_all[i], frags_cutoff_all[j], frags_cutoff_all[k]], False, fragList, atmList, typ, inputs, False)
+            for j in range(i + 1, len(frags_cutoff_all)):
+                for k in range(j + 1, len(frags_cutoff_all)):
+                    inputs = write_json([frags_cutoff_all[i], frags_cutoff_all[j], frags_cutoff_all[k]], False,
+                                        fragList, atmList, typ, inputs, False)
 
     elif typ == "tetramers":
 
@@ -839,16 +905,20 @@ def write_xxmers(fragList, atmList, center_ip_id, method="RIMP2", typ="dimers", 
 
         # TETRAMERS WITH CENTRAL IP
         for i in tqdm.tqdm(range(len(frags_cutoff_central))):
-            for j in range(i+1, len(frags_cutoff_central)):
-                for k in range(j+1, len(frags_cutoff_central)):
-                    inputs = write_json([frags_cutoff_central[i], frags_cutoff_central[j], frags_cutoff_central[k], center_ip_id], True, fragList, atmList, typ, inputs, False)
+            for j in range(i + 1, len(frags_cutoff_central)):
+                for k in range(j + 1, len(frags_cutoff_central)):
+                    inputs = write_json(
+                        [frags_cutoff_central[i], frags_cutoff_central[j], frags_cutoff_central[k], center_ip_id], True,
+                        fragList, atmList, typ, inputs, False)
 
         # TETRAMERS WITH ALL
         for i in tqdm.tqdm(range(len(frags_cutoff_all))):
-            for j in range(i+1, len(frags_cutoff_all)):
-                for k in range(j+1, len(frags_cutoff_all)):
-                    for l in range(k+1, len(frags_cutoff_all)):
-                        inputs = write_json([frags_cutoff_all[i], frags_cutoff_all[j], frags_cutoff_all[k], frags_cutoff_all[l]], False, fragList, atmList, typ, inputs, False)
+            for j in range(i + 1, len(frags_cutoff_all)):
+                for k in range(j + 1, len(frags_cutoff_all)):
+                    for l in range(k + 1, len(frags_cutoff_all)):
+                        inputs = write_json(
+                            [frags_cutoff_all[i], frags_cutoff_all[j], frags_cutoff_all[k], frags_cutoff_all[l]], False,
+                            fragList, atmList, typ, inputs, False)
 
     # JOB FILES
     if dry_run:
@@ -899,7 +969,7 @@ def energies_from_mbe_log(filename):
 
     dir, File = os.path.split(filename)
     dir = dir or "."
-    lines = eof(dir+'/', File, 0.15)
+    lines = eof(dir + '/', File, 0.15)
 
     for line in lines:
 
@@ -1018,11 +1088,11 @@ def energies_from_log(filename):
 
     hf, hf2, os_, ss_ = None, None, None, None
     dir, File = os.path.split(filename)
-    lines = eof(dir+'/', File, 0.15)
+    lines = eof(dir + '/', File, 0.15)
     for line in lines:
-        if "Final E(HF)" in line: # MP2
+        if "Final E(HF)" in line:  # MP2
             hf = line.split()[3]
-        elif "Final energy is:" in line: # RHF
+        elif "Final energy is:" in line:  # RHF
             hf2 = line.split()[3]
         elif "E(RIMP2 (OS))" in line:
             os_ = line.split()[3]
@@ -1034,13 +1104,15 @@ def energies_from_log(filename):
     except TypeError:
         try:
             # RHF CALC
-            hf, os_, ss_ = float(hf2), np.nan, np.nan
+            hf, os_, ss_ = float(hf2), 0.0, 0.0
         except TypeError:
             print('LOG NOT SUCCESSFUL:', filename)
+            sys.exit()
     return hf, os_, ss_
 
 
-def distance_energy_df(dimer_dists, center_ip_id, monomers, dimers, trimers=None, tetramers=None, trimer_dists=None, tetramer_dists=None, kjmol=True):
+def distance_energy_df(dimer_dists, center_ip_id, monomers, dimers, trimers=None, tetramers=None, trimer_dists=None,
+                       tetramer_dists=None, kjmol=True):
     """Energies as the radius is increased from the central frag."""
 
     if kjmol:
@@ -1065,7 +1137,8 @@ def distance_energy_df(dimer_dists, center_ip_id, monomers, dimers, trimers=None
             new_dict["ss"].append(dict_['ss'])
         pd.DataFrame(new_dict).to_csv("monomer_energies.csv", index=False)
 
-    dists_list, ids_list, r1, r2, r3, r4, r5, r6, rmax = [0], [None], [None], [None], [None], [None], [None], [None], [None]
+    dists_list, ids_list, r1, r2, r3, r4, r5, r6, rmax = [0], [None], [None], [None], [None], [None], [None], [None], [
+        None]
 
     def energy_list(dists_l, e_dict, tot_frag, mp2_frag, srs_frag, hf_frag, type_frag, typ):
         """Merge distances and converted energies and change to lists."""
@@ -1090,11 +1163,14 @@ def distance_energy_df(dimer_dists, center_ip_id, monomers, dimers, trimers=None
             ids_list.append(key)
 
             # get hf
-            hf = e_dict.get(key, {}).get('hf')
-            if not hf:
+            try:
+                hf = e_dict[key]['hf']
+            except:
+                print(e_dict)
                 hf = np.nan
                 print(f"!!!Frag {key} HF not found with ave distance {d}!!!")
                 sys.exit()
+
             hf = hf / num_frags * conversion
 
             # get corr
@@ -1127,34 +1203,37 @@ def distance_energy_df(dimer_dists, center_ip_id, monomers, dimers, trimers=None
     # values = a_dict. values() Return values of a dictionary.
     # total = sum(values) Compute sum of the values.
 
-    hf  = sum([i['hf'] for i in monomers.values()]) * conversion
+    hf = sum([i['hf'] for i in monomers.values()]) * conversion
     mp2 = sum([i['os'] + i['ss'] for i in monomers.values()]) * conversion
     srs = sum([i['os'] for i in monomers.values()]) * os_coef * conversion
     tot = hf + srs
-    tot_frag, mp2_frag, srs_frag, hf_frag, type_frag  = [tot], [mp2], [srs], [hf], ["monomer"]
+    tot_frag, mp2_frag, srs_frag, hf_frag, type_frag = [tot], [mp2], [srs], [hf], ["monomer"]
 
     # convert energies, merge with distances and add to lists
-    tot_frag, mp2_frag, srs_frag, hf_frag, type_frag = energy_list(dimer_dists, dimers, tot_frag, mp2_frag, srs_frag, hf_frag, type_frag, typ="dimer")
+    tot_frag, mp2_frag, srs_frag, hf_frag, type_frag = energy_list(dimer_dists, dimers, tot_frag, mp2_frag, srs_frag,
+                                                                   hf_frag, type_frag, typ="dimer")
     if trimers:
-        tot_frag, mp2_frag, srs_frag, hf_frag, type_frag = energy_list(trimer_dists, trimers, tot_frag, mp2_frag, srs_frag, hf_frag, type_frag, typ="trimer")
+        tot_frag, mp2_frag, srs_frag, hf_frag, type_frag = energy_list(trimer_dists, trimers, tot_frag, mp2_frag,
+                                                                       srs_frag, hf_frag, type_frag, typ="trimer")
     if tetramers:
-        tot_frag, mp2_frag, srs_frag, hf_frag, type_frag = energy_list(tetramer_dists, tetramers, tot_frag, mp2_frag, srs_frag, hf_frag, type_frag, typ="tetramer")
+        tot_frag, mp2_frag, srs_frag, hf_frag, type_frag = energy_list(tetramer_dists, tetramers, tot_frag, mp2_frag,
+                                                                       srs_frag, hf_frag, type_frag, typ="tetramer")
 
     data = {
-        'dave' : dists_list,
-        'ids'  : ids_list,
-        'tot'  : tot_frag,
-        'hf'   : hf_frag,
-        'mp2'  : mp2_frag,
-        'srs'  : srs_frag,
-        'type' : type_frag,
-        'r1'   : r1,
-        'r2'   : r2,
-        'r3'   : r3,
-        'r4'   : r4,
-        'r5'   : r5,
-        'r6'   : r6,
-        'rmax' : rmax,
+        'dave': dists_list,
+        'ids': ids_list,
+        'tot': tot_frag,
+        'hf': hf_frag,
+        'mp2': mp2_frag,
+        'srs': srs_frag,
+        'type': type_frag,
+        'r1': r1,
+        'r2': r2,
+        'r3': r3,
+        'r4': r4,
+        'r5': r5,
+        'r6': r6,
+        'rmax': rmax,
     }
 
     return data
@@ -1168,9 +1247,9 @@ def energies_corr_from_log_when_calculated(filename):
         for line in r:
             # QUEUE ID OF MOLECULES
             if 'Molecules' in line:
-                line = line.replace(';','').replace('+', ' ')
+                line = line.replace(';', '').replace('+', ' ')
                 line = line.split()
-                q_id = str(int(line[-1])-1)
+                q_id = str(int(line[-1]) - 1)
                 # DIMER
                 if len(line) == 6:
                     fragments[q_id] = {'id1': line[1], 'id2': line[2]}
@@ -1182,7 +1261,7 @@ def energies_corr_from_log_when_calculated(filename):
 
             # FRAGMENT ENERGIES
             elif 'Fragment' in line:
-                _, q_id, _, _, _, _, os, ss, _ = line.replace(',','').split()
+                _, q_id, _, _, _, _, os, ss, _ = line.replace(',', '').split()
                 fragments[q_id]['os'] = float(os)
                 fragments[q_id]['ss'] = float(ss)
 
@@ -1197,7 +1276,7 @@ def energies_dumped_hf(filename, fragments):
     with open(filename, 'r') as r:
         for line in r:
             if "):" in line:
-                cid, _, hf = line.replace(',','').replace('(','').replace(')',' ').split()
+                cid, _, hf = line.replace(',', '').replace('(', '').replace(')', ' ').split()
                 fragments[cid]['hf'] = float(hf)
 
     # CONVERT FRAG DICT INTO MONOMER AND DIMER DICT
@@ -1235,10 +1314,10 @@ def energies_from_sep_mbe_dimers(logfiles, center_ip_id):
         mon, dim, _, _ = energies_from_mbe_log(log)
 
         if typ == "add" or id1 != str(center_ip_id):
-            first  = mon['0']
+            first = mon['0']
             second = mon['1']
         else:
-            first  = mon['1']
+            first = mon['1']
             second = mon['0']
 
         if not monomers.get(id1) or np.isnan(monomers[id1].get('os')):
@@ -1329,16 +1408,19 @@ def trimer_contributions(trimers, dimers, monomers, np_for_zero=False):
 
         id1, id2, id3 = key.split('-')
         dict_['hf'] = dict_['hf'] - \
-            dimers[keyName(id1, id2)]['hf'] - dimers[keyName(id1, id3)]['hf'] - dimers[keyName(id2, id3)]['hf'] - \
-            monomers[id1]['hf'] - monomers[id2]['hf'] - monomers[id3]['hf']
+                      dimers[keyName(id1, id2)]['hf'] - dimers[keyName(id1, id3)]['hf'] - dimers[keyName(id2, id3)][
+                          'hf'] - \
+                      monomers[id1]['hf'] - monomers[id2]['hf'] - monomers[id3]['hf']
 
         dict_['os'] = dict_['os'] - \
-            dimers[keyName(id1, id2)]['os'] - dimers[keyName(id1, id3)]['os'] - dimers[keyName(id2, id3)]['os'] - \
-            monomers[id1]['os'] - monomers[id2]['os'] - monomers[id3]['os']
+                      dimers[keyName(id1, id2)]['os'] - dimers[keyName(id1, id3)]['os'] - dimers[keyName(id2, id3)][
+                          'os'] - \
+                      monomers[id1]['os'] - monomers[id2]['os'] - monomers[id3]['os']
 
         dict_['ss'] = dict_['ss'] - \
-            dimers[keyName(id1, id2)]['ss'] - dimers[keyName(id1, id3)]['ss'] - dimers[keyName(id2, id3)]['ss']- \
-            monomers[id1]['ss'] - monomers[id2]['ss'] - monomers[id3]['ss']
+                      dimers[keyName(id1, id2)]['ss'] - dimers[keyName(id1, id3)]['ss'] - dimers[keyName(id2, id3)][
+                          'ss'] - \
+                      monomers[id1]['ss'] - monomers[id2]['ss'] - monomers[id3]['ss']
 
     return trimers
 
@@ -1359,23 +1441,29 @@ def tetramer_contributions(tetramers, trimers, dimers, monomers, np_for_zero=Fal
 
         id1, id2, id3, id4 = key.split('-')
         dict_['hf'] = dict_['hf'] - \
-            trimers[keyName(id1, id2, id3)]['hf'] - trimers[keyName(id1, id2, id4)]['hf'] - \
-            trimers[keyName(id1, id3, id4)]['hf'] - trimers[keyName(id2, id3, id4)]['hf'] - \
-            dimers[keyName(id1, id2)]['hf'] - dimers[keyName(id1, id3)]['hf'] - dimers[keyName(id1, id4)]['hf'] - \
-            dimers[keyName(id2, id3)]['hf']- dimers[keyName(id2, id4)]['hf'] - dimers[keyName(id3, id4)]['hf'] - \
-            monomers[id1]['hf'] - monomers[id2]['hf'] - monomers[id3]['hf'] - monomers[id4]['hf']
+                      trimers[keyName(id1, id2, id3)]['hf'] - trimers[keyName(id1, id2, id4)]['hf'] - \
+                      trimers[keyName(id1, id3, id4)]['hf'] - trimers[keyName(id2, id3, id4)]['hf'] - \
+                      dimers[keyName(id1, id2)]['hf'] - dimers[keyName(id1, id3)]['hf'] - dimers[keyName(id1, id4)][
+                          'hf'] - \
+                      dimers[keyName(id2, id3)]['hf'] - dimers[keyName(id2, id4)]['hf'] - dimers[keyName(id3, id4)][
+                          'hf'] - \
+                      monomers[id1]['hf'] - monomers[id2]['hf'] - monomers[id3]['hf'] - monomers[id4]['hf']
         dict_['os'] = dict_['os'] - \
-            trimers[keyName(id1, id2, id3)]['os'] - trimers[keyName(id1, id2, id4)]['os'] - \
-            trimers[keyName(id1, id3, id4)]['os'] - trimers[keyName(id2, id3, id4)]['os'] - \
-            dimers[keyName(id1, id2)]['os'] - dimers[keyName(id1, id3)]['os'] - dimers[keyName(id1, id4)]['os'] - \
-            dimers[keyName(id2, id3)]['os']- dimers[keyName(id2, id4)]['os'] - dimers[keyName(id3, id4)]['os'] - \
-            monomers[id1]['os'] - monomers[id2]['os'] - monomers[id3]['os'] - monomers[id4]['os']
+                      trimers[keyName(id1, id2, id3)]['os'] - trimers[keyName(id1, id2, id4)]['os'] - \
+                      trimers[keyName(id1, id3, id4)]['os'] - trimers[keyName(id2, id3, id4)]['os'] - \
+                      dimers[keyName(id1, id2)]['os'] - dimers[keyName(id1, id3)]['os'] - dimers[keyName(id1, id4)][
+                          'os'] - \
+                      dimers[keyName(id2, id3)]['os'] - dimers[keyName(id2, id4)]['os'] - dimers[keyName(id3, id4)][
+                          'os'] - \
+                      monomers[id1]['os'] - monomers[id2]['os'] - monomers[id3]['os'] - monomers[id4]['os']
         dict_['ss'] = dict_['ss'] - \
-            trimers[keyName(id1, id2, id3)]['ss'] - trimers[keyName(id1, id2, id4)]['ss'] - \
-            trimers[keyName(id1, id3, id4)]['ss'] - trimers[keyName(id2, id3, id4)]['ss'] - \
-            dimers[keyName(id1, id2)]['ss'] - dimers[keyName(id1, id3)]['ss'] - dimers[keyName(id1, id4)]['ss'] - \
-            dimers[keyName(id2, id3)]['ss']- dimers[keyName(id2, id4)]['ss'] - dimers[keyName(id3, id4)]['ss'] - \
-            monomers[id1]['ss'] - monomers[id2]['ss'] - monomers[id3]['ss'] - monomers[id4]['ss']
+                      trimers[keyName(id1, id2, id3)]['ss'] - trimers[keyName(id1, id2, id4)]['ss'] - \
+                      trimers[keyName(id1, id3, id4)]['ss'] - trimers[keyName(id2, id3, id4)]['ss'] - \
+                      dimers[keyName(id1, id2)]['ss'] - dimers[keyName(id1, id3)]['ss'] - dimers[keyName(id1, id4)][
+                          'ss'] - \
+                      dimers[keyName(id2, id3)]['ss'] - dimers[keyName(id2, id4)]['ss'] - dimers[keyName(id3, id4)][
+                          'ss'] - \
+                      monomers[id1]['ss'] - monomers[id2]['ss'] - monomers[id3]['ss'] - monomers[id4]['ss']
 
     return tetramers
 
@@ -1459,40 +1547,104 @@ def checkHdf5CorrelationNan(frags_dict, fragList, atmList, jsonfile):
                 geometryFromListIds(key.split('-'), fragList, atmList, jsonfile, newDir="nan-cor")
 
 
-def suspiciousEnergies(df_data, fragList, atmList, json_):
+def outlierEnergies(dimers, trimers, tetramers, fragList, atmList, json_):
     """Check for very large hf and cor energies."""
 
-    with open('suspicious-energies.txt', 'w') as w:
-        for i in range(len(df_data['hf'])):
+    def getZScore(energies, keys, typ_frag, typ_e, threshold=50):
+        """Z score for each value returning keys of outliers."""
 
-            if df_data['type'][i] == 'dimer':
-                if abs(df_data['hf'][i]) > 100:
-                    w.write(f'{df_data["ids"][i]} hf {df_data["hf"][i]}\n')
-                    geometryFromListIds(df_data["ids"][i].split('-'), fragList, atmList, json_, newDir="large-hf")
-                elif abs(df_data['srs'][i]) > 20:
-                    w.write(f'{df_data["ids"][i]} cor {df_data["srs"][i]}\n')
-                    geometryFromListIds(df_data["ids"][i].split('-'), fragList, atmList, json_, newDir="large-cor")
+        outliers  = []
 
-            elif df_data['type'][i] == 'trimer':
-                if abs(df_data['hf'][i]) > 10:
-                    w.write(f'{df_data["ids"][i]} hf {df_data["hf"][i]}\n')
-                    geometryFromListIds(df_data["ids"][i].split('-'), fragList, atmList, json_, newDir="large-hf")
-                elif abs(df_data['srs'][i]) > 3:
-                    w.write(f'{df_data["ids"][i]} cor {df_data["srs"][i]}\n')
-                    geometryFromListIds(df_data["ids"][i].split('-'), fragList, atmList, json_, newDir="large-cor")
+        # for z score
+        median = np.percentile(energies, 50)
+        std = np.std(energies)
 
-            elif df_data['type'][i] == 'tetramer':
-                if abs(df_data['hf'][i]) > 0.5:
-                    w.write(f'{df_data["ids"][i]} hf {df_data["hf"][i]}\n')
-                    geometryFromListIds(df_data["ids"][i].split('-'), fragList, atmList, json_, newDir="large-hf")
-                elif abs(df_data['srs'][i]) > 0.1:
-                    w.write(f'{df_data["ids"][i]} cor {df_data["srs"][i]}\n')
-                    geometryFromListIds(df_data["ids"][i].split('-'), fragList, atmList, json_, newDir="large-cor")
+        # find z score for each value
+        for i in range(len(energies)):
+            z_score = (energies[i] - median)/std
+            diff = abs(energies[i] - median)
+            if np.abs(z_score) > threshold or diff > 1000:
+                # print(keys[i])
+                outliers.append([keys[i], z_score, energies[i] - median, median, typ_frag, typ_e])
+        return outliers
+
+    def getOutliers(mers, typ, threshold=50):
+        """Performs Z score for each value for HF and OS. Returns outliers."""
+
+        # dont include frags that weren't calculated - will mess with median
+        keys_hf = []
+        keys_os = []
+        hf = []
+        os_ = []
+        check_energies = getAllKeys(0,10256,12410,12447) + getAllKeys(0,13498,13499,14617)
+        for key, dict_ in mers.items():
+            if key in check_energies:
+                print(key, dict_["hf"])
+            if dict_["hf"] != 0:
+                keys_hf.append(key)
+                hf.append(dict_["hf"]*2625.5)
+                if dict_["os"] != 0:
+                    keys_os.append(key)
+                    os_.append(dict_["os"]*2625.5)
+
+        # for z score
+        hf_outliers = getZScore(hf, keys_hf, typ, "hf", threshold)
+        os_outliers = getZScore(os_, keys_os, typ, "os", threshold)
+
+        # remove os outliers if already in hf
+        os_outliers = [x for x in os_outliers if x[0] not in [y[0] for y in hf_outliers]]
+
+        return hf_outliers+os_outliers
+
+    dimer_outliers = getOutliers(dimers, "dimers")
+    trimer_outliers = getOutliers(trimers, "trimers")
+    tetramer_outliers = getOutliers(tetramers, "tetramers")
+
+    with open('outlier-energies.txt', 'w') as w:
+        w.write('typ_frag key typ_e ediff median z_score\n')
+        for key, z_score, ediff, median, typ_frag, typ_e in dimer_outliers+trimer_outliers+tetramer_outliers:
+            w.write(f'{typ_frag} {key} {typ_e} {round(ediff,1)} {round(median,1)} {round(z_score,1)}\n')
+            geometryFromListIds(key.split('-'), fragList, atmList, json_, newDir="outlier")
+
+
+def addInRerunFrags(monomers, dimers, trimers, tetramers):
+    """Find rerun frags and rewrite energies."""
+
+    logs = glob.glob('./nan-cor/*.log') + glob.glob('./lower-conv/*.log') + glob.glob('./outlier-done/*.log')
+
+    for log in logs:
+        ids = log.split('/')[-1].replace("sphere-", "").replace(".log", "").split('-')
+        length = len(ids)
+        key = keyName(*ids)
+
+        hf, os_, ss_ = energies_from_log(log)
+        dict_ = {'hf': hf, 'os': os_, 'ss': ss_}
+        # print(1, key, hf)
+
+        # if key == '1-6003-6145-7323':
+        #     print(dict_, ids, log)
+
+        # monomer
+        if length == 1:
+            monomers[key] = dict_
+        # dimer
+        if length == 2:
+            dimers[key] = dict_
+        # trimer
+        if length == 3:
+            trimers[key] = dict_
+        # tetramer
+        if length == 4:
+            tetramers[key] = dict_
+
+    return monomers, dimers, trimers, tetramers
 
 
 ### TOP LEVEL --------------------------------------------------------
 
-def make_dimer_trimer_tetramer_calcs(jsonfile, method="RIMP2", num_json_dimers=50, num_json_trimers=30, num_json_tetramers=10, dimers=True, trimers=True, tetramers=True, debug=False, cutoff_dims=None, cutoff_trims=None, cutoff_tets=None):
+def make_dimer_trimer_tetramer_calcs(jsonfile, method="RIMP2", num_json_dimers=50, num_json_trimers=30,
+                                     num_json_tetramers=10, dimers=True, trimers=True, tetramers=True, debug=False,
+                                     cutoff_dims=None, cutoff_trims=None, cutoff_tets=None):
     """Make dimer job files for each dimer with the central fragment."""
 
     p = Pprint(to_print=debug)
@@ -1503,7 +1655,7 @@ def make_dimer_trimer_tetramer_calcs(jsonfile, method="RIMP2", num_json_dimers=5
     json_data = read_json(jsonfile)
 
     # CONVERT JSON TO FRAG DATA
-    fragList, atmList, totChrg, totMult, mbe, lattice = json_to_frags(json_data)
+    fragList, atmList, totChrg, totMult, mbe, lattice, level = json_to_frags(json_data)
 
     # ADD CENTROID - USED FOR CENTRAL IP
     fragList = add_centroids(fragList, atmList)
@@ -1526,13 +1678,16 @@ def make_dimer_trimer_tetramer_calcs(jsonfile, method="RIMP2", num_json_dimers=5
     cutoff_pents = 0
     if dimers:
         write_xxmers(fragList, atmList, center_ip_id,
-                     num_json_per_job=num_json_dimers, method=method, typ="dimers", cutoff_central=cutoff_dims, cutoff_all=cutoff_trims)
+                     num_json_per_job=num_json_dimers, method=method, typ="dimers", cutoff_central=cutoff_dims,
+                     cutoff_all=cutoff_trims)
     if trimers:
         write_xxmers(fragList, atmList, center_ip_id,
-                     num_json_per_job=num_json_trimers, method=method, typ="trimers", cutoff_central=cutoff_trims, cutoff_all=cutoff_tets)
+                     num_json_per_job=num_json_trimers, method=method, typ="trimers", cutoff_central=cutoff_trims,
+                     cutoff_all=cutoff_tets)
     if tetramers:
         write_xxmers(fragList, atmList, center_ip_id,
-                     num_json_per_job=num_json_tetramers, method=method, typ="tetramers", cutoff_central=cutoff_tets, cutoff_all=cutoff_pents)
+                     num_json_per_job=num_json_tetramers, method=method, typ="tetramers", cutoff_central=cutoff_tets,
+                     cutoff_all=cutoff_pents)
 
 
 def df_from_logs(
@@ -1544,7 +1699,7 @@ def df_from_logs(
         cutoff_dims=10000,
         cutoff_trims=10000,
         cutoff_tets=10000,
-    ):
+):
     """Make pandas data frame from json and log files."""
 
     p = Pprint(to_print=debug)
@@ -1553,9 +1708,9 @@ def df_from_logs(
     json_data = read_json(jsonfile)
 
     # CONVERT JSON TO FRAG DATA
-    fragList, atmList, totChrg, totMult, mbe, lattice = json_to_frags(json_data)
+    fragList, atmList, totChrg, totMult, mbe, lattice, level = json_to_frags(json_data)
     p.print_("mbe", mbe)
-    p.print_("lattice", lattice)
+    p.print_("latice", lattice)
 
     # CHECK IS MBE
     if not mbe:
@@ -1566,7 +1721,7 @@ def df_from_logs(
 
     # GET MIDPOINT OF XYZ
     mx, my, mz = coords_midpoint(atmList)
-    p.print_("midpoint", (mx, my, mz))
+    p.print_("Midpoint", (mx, my, mz))
 
     # GET CENTRAL IP
     center_ip_id = central_frag(fragList, mx, my, mz)
@@ -1584,6 +1739,7 @@ def df_from_logs(
         write_central_ip(fragList, atmList, center_ip_id, mx, my, mz)
 
     # GET ENERGIES
+    p.print_("Getting energies")
     trimers = {}
     tetramers = {}
 
@@ -1602,18 +1758,28 @@ def df_from_logs(
         hf_energies, os_energies, ss_energies = readHdf5Energies(restart_file)
 
         # read frag ids
+        p.print_("Reading Hdf5")
         keys_of_frag_ids = readFragIdsFromLog(ids_from_log)
 
         # check length of frags and keys
         if len(keys_of_frag_ids.keys()) != len(hf_energies):
             print(f"Length of frags ({len(keys_of_frag_ids.keys())}) does not equal length of HF energies "
                   f"({len(hf_energies)})")
+
         # combine energies
         monomers, dimers, trimers, tetramers = combineEnergiesAndKeys(keys_of_frag_ids, hf_energies, os_energies,
-                                                                 ss_energies)
+                                                                      ss_energies)
+
+        # find any frags rerun and override energies
+        p.print_("Adding rerun frags")
+        monomers, dimers, trimers, tetramers = addInRerunFrags(monomers, dimers, trimers, tetramers)
 
         # find any correlation nan's which are an error
         checkHdf5CorrelationNan({**monomers, **dimers, **trimers, **tetramers}, fragList, atmList, jsonfile)
+
+        # write info and files for large energies
+        p.print_("Writing outliers")
+        outlierEnergies(dimers, trimers, tetramers, fragList, atmList, jsonfile)
 
         # contributions from total energies
         dimers = dimer_contributions(dimers, monomers, np_for_zero=True)
@@ -1625,8 +1791,8 @@ def df_from_logs(
 
     elif get_energies == "dump":
         name = logfile.split('.')
-        fragments = energies_corr_from_log_when_calculated(logfile) # mp2 from start of files
-        monomers, dimers, trimers, tetramers = energies_dumped_hf(hf_dump_file, fragments) # hf from h5dump
+        fragments = energies_corr_from_log_when_calculated(logfile)  # mp2 from start of files
+        monomers, dimers, trimers, tetramers = energies_dumped_hf(hf_dump_file, fragments)  # hf from h5dump
         p.print_("name", name)
 
     elif get_energies == "separate":
@@ -1648,31 +1814,42 @@ def df_from_logs(
     print("Trimer cutoff:", cutoff_trims)
     print("Tetramer cutoff:", cutoff_tets)
 
+    p.print_("Getting distances")
+
     if lattice:
+
         p.print_(f"monomers['{center_ip_id}']", monomers[str(center_ip_id)])
 
         # DISTANCE FROM EACH FRAG TO CENTRAL IP
         dimers_dists = distances_to_central_frag(fragList, center_ip_id, cutoff_dims, mers="dimers")
-        trimers_dists = distances_to_central_frag(fragList, center_ip_id, cutoff_trims, mers="trimers")
-        tetramer_dists = distances_to_central_frag(fragList, center_ip_id, cutoff_tets, mers="tetramers")
+        if level > 2:
+            trimers_dists = distances_to_central_frag(fragList, center_ip_id, cutoff_trims, mers="trimers")
+        if level > 3:
+            tetramer_dists = distances_to_central_frag(fragList, center_ip_id, cutoff_tets, mers="tetramers")
 
         # only keep central frag
         monomers = {str(center_ip_id): monomers[str(center_ip_id)]}
 
     else:
         dimers_dists = distances_between_frags(fragList, cutoff_dims, mers="dimers")
-        trimers_dists = distances_between_frags(fragList, cutoff_trims, mers="trimers")
-        tetramer_dists = []
+        if level > 2:
+            trimers_dists = distances_between_frags(fragList, cutoff_trims, mers="trimers")
+        else:
+            trimers_dists = []
+        if level > 3:
+            tetramer_dists = distances_between_frags(fragList, cutoff_tets, mers="tetramers")
+        else:
+            tetramer_dists = []
 
     # ENERGY PER DISTANCE - PANDAS
-    df_data = distance_energy_df(dimers_dists, center_ip_id, monomers, dimers, trimers, tetramers, trimers_dists, tetramer_dists)
-    df      = pd.DataFrame(df_data)
+    p.print_("Compiling data and making dataframe")
+
+    df_data = distance_energy_df(dimers_dists, center_ip_id, monomers, dimers, trimers, tetramers, trimers_dists,
+                                 tetramer_dists)
+    df = pd.DataFrame(df_data)
     p.print_("df_data.keys()", df_data.keys())
     p.print_("df_data", df_data, still_print=False)
     df.to_csv("df.csv", index=False)
-
-    # write very large energies to file
-    suspiciousEnergies(df_data, fragList, atmList, jsonfile)
 
 
 def make_job_from_jsons(num_json_per_job):
@@ -1700,7 +1877,7 @@ def make_smaller_shell_from_json(json_, cutoff):
     json_data = read_json(json_)
 
     # CONVERT JSON TO FRAG DATA
-    fragList, atmList, totChrg, totMult, mbe, lattice = json_to_frags(json_data)
+    fragList, atmList, totChrg, totMult, mbe, lattice, level = json_to_frags(json_data)
 
     # CHECK IS MBE
     if not mbe:
@@ -1724,7 +1901,8 @@ def make_smaller_shell_from_json(json_, cutoff):
     print(f"Fragments within {cutoff}: {len(indexes)}")
 
     # NEW MBE
-    json_lines, lines = make_exess_input_from_frag_ids(indexes, fragList, atmList, number_checkpoints=0, mbe=mbe, ref_mon=0)
+    json_lines, lines = make_exess_input_from_frag_ids(indexes, fragList, atmList, number_checkpoints=0, mbe=mbe,
+                                                       ref_mon=0)
 
     # WRITE FILES
     write_file(json_.replace('.js', f'-{cutoff}.js'), json_lines)
@@ -1739,7 +1917,7 @@ def geometryFromFragIds(json_, id_list, newDir=None):
     json_data = read_json(json_)
 
     # CONVERT JSON TO FRAG DATA
-    fragList, atmList, totChrg, totMult, mbe, lattice = json_to_frags(json_data)
+    fragList, atmList, totChrg, totMult, mbe, lattice, level = json_to_frags(json_data)
 
     # CHECK IS MBE
     if not mbe:
@@ -1760,8 +1938,8 @@ def geometryFromListIds(id_list, fragList, atmList, jsonfile, mbe=False, newDir=
     if newDir:
         if not os.path.exists(newDir):
             os.mkdir(newDir)
-        write_file(newDir+"/"+jsonfile.replace('.js', f'-{ids}.js'), json_lines)
-        write_xyz(newDir+"/"+jsonfile.replace('.json', f'-{ids}.xyz'), lines)
+        write_file(newDir + "/" + jsonfile.replace('.js', f'-{ids}.js'), json_lines)
+        write_xyz(newDir + "/" + jsonfile.replace('.json', f'-{ids}.xyz'), lines)
     else:
         write_file(jsonfile.replace('.js', f'-{ids}.js'), json_lines)
         write_xyz(jsonfile.replace('.json', f'-{ids}.xyz'), lines)
@@ -1776,7 +1954,8 @@ def xyz_to_json(filename, mbe, method):
     fragList, atmList, totChrg, totMult = systemData(dir, File, True)
 
     # NEW MBE
-    json_lines, lines = make_exess_input_from_frag_ids(list(range(0,len(fragList))), fragList, atmList, number_checkpoints=0, mbe=mbe, method=method)
+    json_lines, lines = make_exess_input_from_frag_ids(list(range(0, len(fragList))), fragList, atmList,
+                                                       number_checkpoints=0, mbe=mbe, method=method)
 
     # WRITE FILES
     write_file(File.replace('.xyz', '_new.json'), json_lines)
@@ -1836,12 +2015,11 @@ def run(value, filename):
 
         print(f"Files used: {files}")
         for filename in files:
-
             # READ JSON
             json_data = read_json(filename)
 
             # CONVERT JSON TO FRAG DATA
-            _, atmList, _, _, _, _ = json_to_frags(json_data)
+            _, atmList, _, _, _, _, _ = json_to_frags(json_data)
 
             # WRITE XYZ
             xyzfile = filename.replace(".json", ".xyz")
