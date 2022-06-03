@@ -959,7 +959,7 @@ def energies_from_mbe_log(filename):
 
         energy = float(energy)
         if hf:
-            dict_[key] = {'hf': energy, 'os': np.nan, 'ss': np.nan}
+            dict_[key] = {'hf': energy, 'os': 0.0, 'ss': 0.0}
         elif os_:
             dict_[key]['os'] = energy
         elif ss_:
@@ -1547,11 +1547,15 @@ def checkHdf5CorrelationNan(frags_dict, fragList, atmList, jsonfile):
                 geometryFromListIds(key.split('-'), fragList, atmList, jsonfile, newDir="nan-cor")
 
 
+
 def outlierEnergies(dimers, trimers, tetramers, fragList, atmList, json_):
     """Check for very large hf and cor energies."""
 
     def getZScore(energies, keys, typ_frag, typ_e, threshold=50):
         """Z score for each value returning keys of outliers."""
+
+        if not energies:
+            return []
 
         outliers  = []
 
@@ -1576,10 +1580,10 @@ def outlierEnergies(dimers, trimers, tetramers, fragList, atmList, json_):
         keys_os = []
         hf = []
         os_ = []
-        check_energies = getAllKeys(0,10256,12410,12447) + getAllKeys(0,13498,13499,14617)
+        # check_energies = getAllKeys(0,10256,12410,12447) + getAllKeys(0,13498,13499,14617)
         for key, dict_ in mers.items():
-            if key in check_energies:
-                print(key, dict_["hf"])
+            # if key in check_energies:
+            #     print(key, dict_["hf"])
             if dict_["hf"] != 0:
                 keys_hf.append(key)
                 hf.append(dict_["hf"]*2625.5)
@@ -1748,6 +1752,18 @@ def df_from_logs(
         monomers, dimers, trimers, tetramers = energies_from_mbe_log(logfile)
         cutoff_dims, cutoff_trims, cutoff_tets = getCuttoffsFromJson(json_data)
         p.print_("name", name)
+
+        # find any frags rerun and override energies
+        p.print_("Adding rerun frags")
+        monomers, dimers, trimers, tetramers = addInRerunFrags(monomers, dimers, trimers, tetramers)
+
+        # find any correlation nan's which are an error
+        checkHdf5CorrelationNan({**monomers, **dimers, **trimers, **tetramers}, fragList, atmList, jsonfile)
+
+        # write info and files for large energies
+        p.print_("Writing outliers")
+        outlierEnergies(dimers, trimers, tetramers, fragList, atmList, jsonfile)
+
 
     elif get_energies == "restart":
 
