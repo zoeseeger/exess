@@ -1180,7 +1180,7 @@ def distance_energy_df(dimer_dists, center_ip_id, monomers, dimers, trimers=None
                 os = np.nan
                 ss = np.nan
                 # print(f"!!!Frag {key} OS not found with ave distance {d}!!!")
-                sys.exit()
+                # sys.exit()
             mp2 = (os + ss) / num_frags * conversion
             srs = os / num_frags * os_coef * conversion
 
