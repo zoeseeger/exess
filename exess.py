@@ -9,6 +9,7 @@ import math
 import json
 import tqdm
 import h5py
+from itertools import permutations
 import numpy as np
 import pandas as pd
 
@@ -401,6 +402,55 @@ def central_frag_with_charge(frag_list, atmList, midpointx, midpointy, midpointz
     return min_ion
 
 
+def pair_ions_lowest_dist(fragList, atmList):
+    """Get pairing of molecules that has lowest total distance."""
+
+    # cation/anion lists
+    cations, anions = [], []
+    for i in range(len(fragList)):
+        if fragList[i]['chrg'] == 1:
+            cations.append(i)
+        elif fragList[i]['chrg'] == -1:
+            anions.append(i)
+        else:
+            sys.exit("Only written for singly charged species. exiting ...")
+
+    anions = list(permutations(anions)) # perms of anions
+    cations = [cations] * len(anions)   # make list of lists of cations
+
+    # make combinations
+    combinations = []
+    for an_list, cat_list in zip(anions, cations):
+        comb = []
+        for an, cat in zip(an_list, cat_list):
+            comb.append([cat, an])
+        combinations.append(comb)
+
+    # pair
+    comb, min_dist = combination_smallest_distance(fragList, combinations)
+
+    # sort combinations largest val to smallest so can combine frags safely
+    comb_sorted = []
+    starting_frags = len(fragList)
+    for i in range(starting_frags-1, -1, -1):
+        for _ in comb:
+            if i in _:
+                comb_sorted.append(_)
+                comb.remove(_)
+                break
+
+    # combine frags
+    for index1, index2 in comb_sorted:
+        lines = []
+        fragList, newid = add_two_frags_together(fragList, atmList, index1, index2)
+        # for id in fragList[newid]['ids']:
+        #     atm = atmList[id]
+        #     lines.append(f"{atm['sym']} {atm['x']} {atm['y']} {atm['z']}\n")
+        # write_xyz_zoe(f"{index1}-{index2}.xyz", lines)
+
+    return fragList
+
+
 def add_two_frags_together(fragList, atm_list, frag1_id, frag2_id):
     """Combine two fragments in fragList."""
 
@@ -414,7 +464,7 @@ def add_two_frags_together(fragList, atm_list, frag1_id, frag2_id):
         'grp': new_id,
         'chrg': fragList[frag1_id]['chrg'] + fragList[frag2_id]['chrg'],
         'mult': fragList[frag1_id]['mult'] + fragList[frag2_id]['mult'] - 1,
-        'name': fragList[new_id]['name'],
+        'name': f"frag{new_id}",
     }
 
     new_frag = add_centroids([new_frag], atm_list)
@@ -435,6 +485,30 @@ def add_two_frags_together(fragList, atm_list, frag1_id, frag2_id):
             print(i, "does not")
 
     return new_fragList, new_id
+
+
+def combination_smallest_distance(fragList, combinations):
+    """Return the list of anion-cation pairs that has the smallest distance."""
+
+    comb_use = None
+    min_dist = 1000
+    for comb in combinations:
+
+        tot_dist = 0
+
+        # FOR EACH CATION, ANION PAIR
+        for cat, an in comb:
+
+            tot_dist += distance(
+                fragList[cat]['cx'], fragList[cat]['cy'], fragList[cat]['cz'],
+                fragList[an]['cx'], fragList[an]['cy'], fragList[an]['cz']
+            )
+
+        if tot_dist < min_dist:
+            min_dist = tot_dist
+            comb_use = comb
+
+    return comb_use, min_dist
 
 
 def add_dist_from_central_ip(fragList, center_ip_id):
@@ -584,6 +658,12 @@ def exess_mbe_template(frag_ids, frag_charges, symbols, geometry, method="RIMP2"
                 "trimer_mp2_cutoff": 20 * angstrom2bohr,
                 "tetramer_cutoff": 25 * angstrom2bohr,
                 "tetramer_mp2_cutoff": 10 * angstrom2bohr
+            },
+            "FMO": {
+                "fmo_type": "CPF",
+                "mulliken_approx": False,
+                "esp_cutoff": 100000,
+                "esp_maxit": 50
             },
             "check_rst": {
                 "checkpoint": to_checkpoint,
@@ -1122,25 +1202,38 @@ def distance_energy_df(dimer_dists, center_ip_id, monomers, dimers, trimers=None
 
     basis = "vdz"
 
+    center_ip_id = str(center_ip_id)
+
     if basis == 'vdz':
         os_coef = osvdz2srs
     elif basis == 'vtz':
         os_coef = osvtz2srs
 
-    # write monomer energies
-    if False:
-        new_dict = {"mon": [], "hf": [], "os": [], "ss": []}
-        for id_, dict_ in monomers.items():
-            new_dict["mon"].append(id_)
-            new_dict["hf"].append(dict_['hf'])
-            new_dict["os"].append(dict_['os'])
-            new_dict["ss"].append(dict_['ss'])
-        pd.DataFrame(new_dict).to_csv("monomer_energies.csv", index=False)
+    dists_list, ids_list, r1, r2, r3, r4, r5, r6, rmax = [], [], [], [], [], [], [], [], []
+    tot_frag, mp2_frag, srs_frag, hf_frag, type_frag, central = [], [], [], [], [], []
 
-    dists_list, ids_list, r1, r2, r3, r4, r5, r6, rmax = [0], [None], [None], [None], [None], [None], [None], [None], [
-        None]
+    # monomers
+    for id_, dict_ in monomers.items():
+        dists_list.append(np.nan)
+        ids_list.append(id_)
+        r1.append(np.nan)
+        r2.append(np.nan)
+        r3.append(np.nan)
+        r4.append(np.nan)
+        r5.append(np.nan)
+        r6.append(np.nan)
+        rmax.append(np.nan)
+        hf_frag.append(dict_['hf'] * conversion)
+        mp2_frag.append((dict_['os'] + dict_['ss']) * conversion)
+        srs_frag.append(dict_['os'] * os_coef * conversion)
+        tot_frag.append(hf_frag[-1] + srs_frag[-1])
+        type_frag.append("monomer")
+        if id_ == center_ip_id:
+            central.append(True)
+        else:
+            central.append(False)
 
-    def energy_list(dists_l, e_dict, tot_frag, mp2_frag, srs_frag, hf_frag, type_frag, typ):
+    def energy_list(dists_l, central_ip_id, e_dict, tot_frag, mp2_frag, srs_frag, hf_frag, type_frag, central, typ):
         """Merge distances and converted energies and change to lists."""
 
         if typ == "dimer":
@@ -1167,7 +1260,7 @@ def distance_energy_df(dimer_dists, center_ip_id, monomers, dimers, trimers=None
                 hf = e_dict[key]['hf']
             except:
                 print(e_dict)
-                hf = np.nan
+                # hf = np.nan
                 print(f"!!!Frag {key} HF not found with ave distance {d}!!!")
                 sys.exit()
 
@@ -1195,29 +1288,22 @@ def distance_energy_df(dimer_dists, center_ip_id, monomers, dimers, trimers=None
             srs_frag.append(srs)
             hf_frag.append(hf)
             type_frag.append(typ)
+            if central_ip_id in key.split('-'):
+                central.append(True)
+            else:
+                central.append(False)
 
-        return tot_frag, mp2_frag, srs_frag, hf_frag, type_frag
-
-    # MONOMER ENERGIES
-    # a_dict = {"a":1, "b":2, "c": 3}
-    # values = a_dict. values() Return values of a dictionary.
-    # total = sum(values) Compute sum of the values.
-
-    hf = sum([i['hf'] for i in monomers.values()]) * conversion
-    mp2 = sum([i['os'] + i['ss'] for i in monomers.values()]) * conversion
-    srs = sum([i['os'] for i in monomers.values()]) * os_coef * conversion
-    tot = hf + srs
-    tot_frag, mp2_frag, srs_frag, hf_frag, type_frag = [tot], [mp2], [srs], [hf], ["monomer"]
+        return tot_frag, mp2_frag, srs_frag, hf_frag, type_frag, central
 
     # convert energies, merge with distances and add to lists
-    tot_frag, mp2_frag, srs_frag, hf_frag, type_frag = energy_list(dimer_dists, dimers, tot_frag, mp2_frag, srs_frag,
-                                                                   hf_frag, type_frag, typ="dimer")
+    tot_frag, mp2_frag, srs_frag, hf_frag, type_frag, central = energy_list(dimer_dists, center_ip_id, dimers, tot_frag,
+                mp2_frag, srs_frag, hf_frag, type_frag, central, typ="dimer")
     if trimers:
-        tot_frag, mp2_frag, srs_frag, hf_frag, type_frag = energy_list(trimer_dists, trimers, tot_frag, mp2_frag,
-                                                                       srs_frag, hf_frag, type_frag, typ="trimer")
+        tot_frag, mp2_frag, srs_frag, hf_frag, type_frag, central = energy_list(trimer_dists, center_ip_id, trimers,
+                tot_frag, mp2_frag, srs_frag, hf_frag, type_frag, central, typ="trimer")
     if tetramers:
-        tot_frag, mp2_frag, srs_frag, hf_frag, type_frag = energy_list(tetramer_dists, tetramers, tot_frag, mp2_frag,
-                                                                       srs_frag, hf_frag, type_frag, typ="tetramer")
+        tot_frag, mp2_frag, srs_frag, hf_frag, type_frag, central = energy_list(tetramer_dists, center_ip_id, tetramers,
+                tot_frag, mp2_frag, srs_frag, hf_frag, type_frag, central, typ="tetramer")
 
     data = {
         'dave': dists_list,
@@ -1227,6 +1313,7 @@ def distance_energy_df(dimer_dists, center_ip_id, monomers, dimers, trimers=None
         'mp2': mp2_frag,
         'srs': srs_frag,
         'type': type_frag,
+        'central_frag': central,
         'r1': r1,
         'r2': r2,
         'r3': r3,
@@ -1540,15 +1627,18 @@ def readFragIdsFromLog(filename):
 def checkHdf5CorrelationNan(frags_dict, fragList, atmList, jsonfile):
     """Check cor energies are not error. Cor energies that were not calculated are 0.0 and nan if error."""
 
-    with open('correlation-nan.txt', 'w') as w:
-        for key, dict_ in frags_dict.items():
-            if np.isnan(dict_['os']):
-                w.write(f"{key}\n")
-                geometryFromListIds(key.split('-'), fragList, atmList, jsonfile, newDir="nan-cor")
+    lines = ""
+    for key, dict_ in frags_dict.items():
+        if np.isnan(dict_['os']):
+            lines += f"{key}\n"
+            geometryFromListIds(key.split('-'), fragList, atmList, jsonfile, newDir="nan-cor")
+
+    if lines:
+        with open('correlation-nan.txt', 'w') as w:
+            w.write(lines)
 
 
-
-def outlierEnergies(dimers, trimers, tetramers, fragList, atmList, json_):
+def outlierEnergies(dimers, trimers, tetramers, fragList, atmList, json_, write_outliers=False):
     """Check for very large hf and cor energies."""
 
     def getZScore(energies, keys, typ_frag, typ_e, threshold=50):
@@ -1603,12 +1693,15 @@ def outlierEnergies(dimers, trimers, tetramers, fragList, atmList, json_):
     dimer_outliers = getOutliers(dimers, "dimers")
     trimer_outliers = getOutliers(trimers, "trimers")
     tetramer_outliers = getOutliers(tetramers, "tetramers")
+    outliers = dimer_outliers+trimer_outliers+tetramer_outliers
 
-    with open('outlier-energies.txt', 'w') as w:
-        w.write('typ_frag key typ_e ediff median z_score\n')
-        for key, z_score, ediff, median, typ_frag, typ_e in dimer_outliers+trimer_outliers+tetramer_outliers:
-            w.write(f'{typ_frag} {key} {typ_e} {round(ediff,1)} {round(median,1)} {round(z_score,1)}\n')
-            geometryFromListIds(key.split('-'), fragList, atmList, json_, newDir="outlier")
+    if outliers:
+        with open('outlier-energies.txt', 'w') as w:
+            w.write('typ_frag key typ_e ediff median z_score\n')
+            for key, z_score, ediff, median, typ_frag, typ_e in outliers:
+                w.write(f'{typ_frag} {key} {typ_e} {round(ediff,1)} {round(median,1)} {round(z_score,1)}\n')
+                if write_outliers:
+                    geometryFromListIds(key.split('-'), fragList, atmList, json_, newDir="outlier")
 
 
 def addInRerunFrags(monomers, dimers, trimers, tetramers):
@@ -1763,7 +1856,6 @@ def df_from_logs(
         # write info and files for large energies
         p.print_("Writing outliers")
         outlierEnergies(dimers, trimers, tetramers, fragList, atmList, jsonfile)
-
 
     elif get_energies == "restart":
 
@@ -1961,7 +2053,7 @@ def geometryFromListIds(id_list, fragList, atmList, jsonfile, mbe=False, newDir=
         write_xyz(jsonfile.replace('.json', f'-{ids}.xyz'), lines)
 
 
-def xyz_to_json(filename, mbe, method):
+def xyz_to_json(filename, mbe, method, pair_type=None):
     """Convert xyz file to exess json input."""
 
     from system import systemData
@@ -1969,12 +2061,27 @@ def xyz_to_json(filename, mbe, method):
     dir, File = os.path.split(filename)
     fragList, atmList, totChrg, totMult = systemData(dir, File, True)
 
+    # ADD CENTROIDS - USED FOR CENTRAL IP
+    fragList = add_centroids(fragList, atmList)
+
+    # Pair molecules by lowest total pairing distance
+    if pair_type == "all":
+            print(fragList)
+            fragList = pair_ions_lowest_dist(fragList, atmList)
+            print(fragList)
+
+    # GET MIDPOINT OF ALL COORDS
+    mx, my, mz = coords_midpoint(atmList)
+
+    # central frag
+    center_frag_id = central_frag_with_charge(fragList, atmList, mx, my, mz, 0)
+
     # NEW MBE
     json_lines, lines = make_exess_input_from_frag_ids(list(range(0, len(fragList))), fragList, atmList,
-                                                       number_checkpoints=0, mbe=mbe, method=method)
+                            ref_mon=center_frag_id, number_checkpoints=0, mbe=mbe, method=method)
 
     # WRITE FILES
-    write_file(File.replace('.xyz', '_new.json'), json_lines)
+    write_file(File.replace('.xyz', '.json'), json_lines)
 
 
 def run(value, filename):
@@ -2046,6 +2153,7 @@ def run(value, filename):
 
         mbe = input("MBE [y]: ")
         meth = input("Method [RIMP2]: ")
+        pair = input("Pair ions [y]: ")
 
         if mbe == "n" or mbe == "N":
             mbe = False
@@ -2055,14 +2163,20 @@ def run(value, filename):
         if meth == "":
             meth = "RIMP2"
 
+        if pair == "n" or pair == "N":
+            pair = "none"
+        else:
+            pair = "all"
+
+
         if not filename:
             files = glob.glob("*xyz")
             print(f"Files used: {files}")
             for filename in files:
-                xyz_to_json(filename, mbe, meth)
+                xyz_to_json(filename, mbe, meth, pair)
         else:
             print(f"File used: {filename}")
-            xyz_to_json(filename, mbe, meth)
+            xyz_to_json(filename, mbe, meth, pair)
 
     # make job from jsons
     elif value == "4":
