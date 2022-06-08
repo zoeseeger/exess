@@ -612,7 +612,7 @@ def json_to_frags(json_data):
 
 
 def exess_mbe_template(frag_ids, frag_charges, symbols, geometry, method="RIMP2", nfrag_stop=None, basis="cc-pVDZ",
-                       auxbasis="cc-pVDZ-RIFIT", number_checkpoints=3, ref_mon=0):
+                       auxbasis="cc-pVDZ-RIFIT", number_checkpoints=3, level=4, ref_mon=0):
     """Json many body energy exess template."""
 
     # FRAGS
@@ -648,7 +648,7 @@ def exess_mbe_template(frag_ids, frag_charges, symbols, geometry, method="RIMP2"
             },
             "frag": {
                 "method": "MBE",
-                "level": 4,
+                "level": level,
                 "ngpus_per_group": 4,
                 "lattice_energy_calc": True,
                 "reference_monomer": ref_mon,
@@ -781,7 +781,7 @@ def format_json_input_file(dict_):
 
 
 def make_exess_input_from_frag_ids(frag_indexs, fragList, atmList, method="RIMP2", nfrag_stop=None, basis="cc-pVDZ",
-                                   auxbasis="cc-pVDZ-RIFIT", number_checkpoints=3, mbe=False, ref_mon=0):
+                                   auxbasis="cc-pVDZ-RIFIT", number_checkpoints=3, mbe=False, ref_mon=0, level=4):
     """Make exess input from frag indexes and fraglist."""
 
     symbols = []
@@ -807,7 +807,7 @@ def make_exess_input_from_frag_ids(frag_indexs, fragList, atmList, method="RIMP2
     # TO JSON
     if mbe:
         json_dict = exess_mbe_template(frag_ids, frag_charges, symbols, geometry, method, nfrag_stop, basis, auxbasis,
-                                       number_checkpoints, ref_mon=ref_mon)
+                                       number_checkpoints, level, ref_mon=ref_mon)
     else:
         json_dict = exess_template(symbols, geometry, method, basis, auxbasis)
     json_lines = format_json_input_file(json_dict)
@@ -1737,6 +1737,28 @@ def addInRerunFrags(monomers, dimers, trimers, tetramers):
     return monomers, dimers, trimers, tetramers
 
 
+def writeCentralMBE(center_frag_id, fragList, fragList_init, atmList, method, File):
+
+    # get initial frag ids which contain atoms of central ip
+    frag_ids_in_central = []
+    for frg in fragList:
+        if center_frag_id == frg["grp"]:
+            for atm in frg['ids']:
+                for val, frag_init in enumerate(fragList_init):
+                    if atm in frag_init['ids']:
+                        frag_ids_in_central.append(val)
+
+    frag_ids_in_central = list(set(frag_ids_in_central))
+
+    # mbe of central
+    json_lines, lines = make_exess_input_from_frag_ids(frag_ids_in_central, fragList_init, atmList,
+                                                       ref_mon=0, number_checkpoints=0,
+                                                       mbe=True, method=method, level=2)
+
+    # WRITE FILES
+    write_file(File.replace('.xyz', '_central.json'), json_lines)
+
+
 ### TOP LEVEL --------------------------------------------------------
 
 def make_dimer_trimer_tetramer_calcs(jsonfile, method="RIMP2", num_json_dimers=50, num_json_trimers=30,
@@ -2059,22 +2081,27 @@ def xyz_to_json(filename, mbe, method, pair_type=None):
     from system import systemData
 
     dir, File = os.path.split(filename)
-    fragList, atmList, totChrg, totMult = systemData(dir, File, True)
+    fragList_init, atmList, totChrg, totMult = systemData(dir, File, True)
 
     # ADD CENTROIDS - USED FOR CENTRAL IP
-    fragList = add_centroids(fragList, atmList)
+    fragList_init = add_centroids(fragList_init, atmList)
 
     # Pair molecules by lowest total pairing distance
     if pair_type == "all":
-            print(fragList)
-            fragList = pair_ions_lowest_dist(fragList, atmList)
-            print(fragList)
+            fragList = pair_ions_lowest_dist(fragList_init, atmList)
+    else:
+        fragList = fragList_init
+
 
     # GET MIDPOINT OF ALL COORDS
     mx, my, mz = coords_midpoint(atmList)
 
     # central frag
     center_frag_id = central_frag_with_charge(fragList, atmList, mx, my, mz, 0)
+
+    # make dimer calc of central ion pair if paired
+    if pair_type == "all":
+        writeCentralMBE(center_frag_id, fragList, fragList_init, atmList, method, File)
 
     # NEW MBE
     json_lines, lines = make_exess_input_from_frag_ids(list(range(0, len(fragList))), fragList, atmList,
