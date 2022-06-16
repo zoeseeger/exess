@@ -1861,6 +1861,8 @@ def df_from_logs(
     p.print_("Getting energies")
     trimers = {}
     tetramers = {}
+    trimers_dists = []
+    tetramer_dists = []
 
     if get_energies == "log":
         name = logfile.split('.')
@@ -2120,6 +2122,13 @@ def run(value, filename):
     # dataframe from logs
     elif value == "1":
 
+        if not filename:
+            jsn = glob.glob("*json")[0]
+            log = glob.glob("*.log")[0]
+        else:
+            log = filename
+            jsn = log.replace('.json', '.log')
+
         if os.path.isdir("dimers"):
             log = None
             get_energies = "separate"
@@ -2137,11 +2146,9 @@ def run(value, filename):
             dim, tri, tet = "None", "None", "None"
 
         else:
-            log = glob.glob("*.log")[0]
             get_energies = "log"
             dim, tri, tet = "None", "None", "None"
 
-        jsn = glob.glob("*.json")[0]
         print(f"Getting energies: {get_energies}")
         print(f"File used: {jsn}")
         df_from_logs(
