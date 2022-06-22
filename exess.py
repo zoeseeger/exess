@@ -1844,6 +1844,9 @@ def df_from_logs(
 
     # GET CENTRAL IP
     center_ip_id = central_frag(fragList, mx, my, mz)
+    # read central frag from json if lattice
+    if lattice:
+        center_ip_id = json_data["keywords"]["frag"]["reference_monomer"]
     if os.path.exists("central_ip_id"):
         center_ip_id = int(open("central_ip_id", 'r').read().strip())
         print("Central ion pair from file", center_ip_id)
