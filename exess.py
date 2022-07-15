@@ -552,12 +552,15 @@ def json_to_frags(json_data):
     mbe = False
     lattice = False
     level = None
+    central_mon = None
 
     if json_data['model'].get('fragmentation'):
         mbe = True
         if json_data["keywords"]["frag"].get("lattice_energy_calc"):
             lattice = json_data["keywords"]["frag"].get("lattice_energy_calc")
         level = json_data["keywords"]["frag"].get("level")
+
+    central_mon = json_data["keywords"]["frag"].get("reference_monomer")
 
     # FROM JSON
     symbols = json_data["molecule"]["symbols"]
@@ -608,7 +611,7 @@ def json_to_frags(json_data):
         fragList[grp]['ids'].append(i)
         fragList[grp]['syms'].append(symbols[i])
 
-    return fragList, atmList, totChrg, totMult, mbe, lattice, level
+    return fragList, atmList, totChrg, totMult, mbe, lattice, level, central_mon
 
 
 def exess_mbe_template(frag_ids, frag_charges, symbols, geometry, method="RIMP2", nfrag_stop=None, basis="cc-pVDZ",
@@ -626,6 +629,7 @@ def exess_mbe_template(frag_ids, frag_charges, symbols, geometry, method="RIMP2"
     ncheck = number_checkpoints + 1
     ncheck = int((mons + ncheck) / ncheck)
 
+    to_checkpoint = True
     if number_checkpoints == 0:
         to_checkpoint = False
 
@@ -1514,7 +1518,7 @@ def trimer_contributions(trimers, dimers, monomers, np_for_zero=False):
 
 def tetramer_contributions(tetramers, trimers, dimers, monomers, np_for_zero=False):
     """Remove trimer, dimer and monomer energies from tetramer energies."""
-
+    print("-------tetramer_contributions--------")
     for key, dict_ in tetramers.items():
 
         # 0.0 for energies not calculated will mess up contributions
@@ -1527,6 +1531,7 @@ def tetramer_contributions(tetramers, trimers, dimers, monomers, np_for_zero=Fal
                 dict_['ss'] = np.nan
 
         id1, id2, id3, id4 = key.split('-')
+        # hf_init = dict_['hf']
         dict_['hf'] = dict_['hf'] - \
                       trimers[keyName(id1, id2, id3)]['hf'] - trimers[keyName(id1, id2, id4)]['hf'] - \
                       trimers[keyName(id1, id3, id4)]['hf'] - trimers[keyName(id2, id3, id4)]['hf'] - \
@@ -1551,6 +1556,7 @@ def tetramer_contributions(tetramers, trimers, dimers, monomers, np_for_zero=Fal
                       dimers[keyName(id2, id3)]['ss'] - dimers[keyName(id2, id4)]['ss'] - dimers[keyName(id3, id4)][
                           'ss'] - \
                       monomers[id1]['ss'] - monomers[id2]['ss'] - monomers[id3]['ss'] - monomers[id4]['ss']
+        # print(hf_init, dict_['hf'])
 
     return tetramers
 
@@ -1624,7 +1630,7 @@ def readFragIdsFromLog(filename):
     return d
 
 
-def checkHdf5CorrelationNan(frags_dict, fragList, atmList, jsonfile):
+def checkCorrelationNan(frags_dict, fragList, atmList, jsonfile):
     """Check cor energies are not error. Cor energies that were not calculated are 0.0 and nan if error."""
 
     lines = ""
@@ -1704,8 +1710,8 @@ def outlierEnergies(dimers, trimers, tetramers, fragList, atmList, json_, write_
                     geometryFromListIds(key.split('-'), fragList, atmList, json_, newDir="outlier")
 
 
-def addInRerunFrags(monomers, dimers, trimers, tetramers):
-    """Find rerun frags and rewrite energies."""
+def addInRerunFrags(monomers, dimers, trimers, tetramers, contributions=False):
+    """Find rerun frags and rewrite energies. If contributions=True then convert added energies to contributions."""
 
     logs = glob.glob('./nan-cor/*.log') + glob.glob('./lower-conv/*.log') + glob.glob('./outlier-done/*.log')
 
@@ -1714,24 +1720,41 @@ def addInRerunFrags(monomers, dimers, trimers, tetramers):
         length = len(ids)
         key = keyName(*ids)
 
+        # if non mbe
         hf, os_, ss_ = energies_from_log(log)
         dict_ = {'hf': hf, 'os': os_, 'ss': ss_}
-        # print(1, key, hf)
 
-        # if key == '1-6003-6145-7323':
-        #     print(dict_, ids, log)
+        # if mbe
+        mons, dims, tris, tets = energies_from_mbe_log(log)
 
         # monomer
         if length == 1:
             monomers[key] = dict_
         # dimer
         if length == 2:
+            # not mbe and want contributions
+            if contributions and not mons:
+                new_dimers = dimer_contributions({key: dict_}, monomers, np_for_zero=True)
+                dict_ = new_dimers[key]
+            # mbe
+            elif mons and contributions:
+                dict_ = dims['0-1']
             dimers[key] = dict_
         # trimer
         if length == 3:
+            if contributions and not mons:
+                new_trimers = trimer_contributions({key: dict_}, dimers, monomers, np_for_zero=True)
+                dict_ = new_trimers[key]
+            elif mons and contributions:
+                dict_ = tris['0-1-2']
             trimers[key] = dict_
         # tetramer
         if length == 4:
+            if contributions and not mons:
+                new_tetramers = tetramer_contributions({key: dict_}, trimers, dimers, monomers, np_for_zero=True)
+                dict_ = new_tetramers[key]
+            elif mons and contributions:
+                dict_ = tets['0-1-2-3']
             tetramers[key] = dict_
 
     return monomers, dimers, trimers, tetramers
@@ -1759,6 +1782,197 @@ def writeCentralMBE(center_frag_id, fragList, fragList_init, atmList, method, Fi
     write_file(File.replace('.xyz', '_central.json'), json_lines)
 
 
+def psi4Template(name, chrg, mult, xyz_lines, mem=64, method="scf", bset="cc-pVDZ", ref="rhf"):
+    """PSI4 template."""
+
+    lines = f"""memory {mem} Gb
+molecule complex {{
+ {chrg} {mult}
+{xyz_lines}}}
+set globals {{
+    basis {bset}
+    scf_type df
+    freeze_core True
+    guess sad
+    reference {ref}
+    s_orthogonalization canonical
+    basis_guess 6-31G
+}}
+set print 2
+energy('{method}')
+"""
+    with open(name, 'w') as w:
+        w.write(lines)
+
+
+def psi4GadiJobHugememTemplate(inputname):
+
+    lines = f"""#!/bin/bash
+#PBS -l walltime=24:00:00
+#PBS -l ncpus=48
+#PBS -l mem=1470GB
+#PBS -l jobfs=1400GB
+#PBS -q hugemem
+#PBS -P k96
+#PBS -l storage=gdata/k96+scratch/k96
+#PBS -l wd
+#PBS -m a
+
+module load psi4
+psi4 -n $PBS_NCPUS {inputname}.inp {inputname}.log"""
+
+    with open(f"{inputname}.job", 'w') as w:
+        w.write(lines)
+
+
+def psi4GadiJobNormalTemplate(inputname):
+
+    lines = f"""#!/bin/bash
+#PBS -l walltime=24:00:00
+#PBS -l ncpus=12
+#PBS -l mem=48GB
+#PBS -l jobfs=350GB
+#PBS -q normal
+#PBS -P k96
+#PBS -l storage=gdata/k96+scratch/k96
+#PBS -l wd
+#PBS -m a
+
+module load psi4
+psi4 -n $PBS_NCPUS {inputname}.inp {inputname}.log"""
+
+    with open(f"{inputname}.job", 'w') as w:
+        w.write(lines)
+
+
+def bsseCentralMon(jsonfile):
+    """Make central monomer BSSE calcs from json file."""
+
+    # READ JSON
+    json_data = read_json(jsonfile)
+
+    # CONVERT JSON TO FRAG DATA
+    fragList, atmList, totChrg, totMult, mbe, lattice, level, center_ip_id = json_to_frags(json_data)
+
+    if center_ip_id is None:
+        sys.exit("Expected ref monomer in json. exiting . . .")
+
+    atoms = []
+    ghost_atoms = []
+    for frag in fragList:
+        if frag["grp"] == center_ip_id:
+            chrg = frag["chrg"]
+            mult = frag["mult"]
+            for atm in frag["ids"]:
+                atoms.append(atmList[atm])
+        else:
+            for atm in frag["ids"]:
+                ghost_atoms.append(atmList[atm])
+
+    name = jsonfile.replace(".json", "-central-mon-cp")
+    psi4CalcFromAtoms(f"{name}.inp", chrg, mult, atoms, ghost_atoms, mem=1468)
+    psi4GadiJobHugememTemplate(name)
+
+    name = jsonfile.replace(".json", "-central-mon")
+    psi4CalcFromAtoms(f"{name}.inp", chrg, mult, atoms, mem=46)
+    psi4GadiJobNormalTemplate(name)
+
+
+def bsseFromJson(jsonfile):
+    """Make BSSE calcs from json lattice energy file."""
+
+    # READ JSON
+    json_data = read_json(jsonfile)
+
+    # CONVERT JSON TO FRAG DATA
+    fragList, atmList, totChrg, totMult, mbe, lattice, level, center_ip_id = json_to_frags(json_data)
+
+    fragList = add_centroids(fragList, atmList)
+
+    fragList = add_dist_from_central_ip(fragList, center_ip_id)
+
+    def psi4CalcFromIds(fragList, atmList, frag_ids=(), ghost_frag_ids=()):
+
+        # if not os.path.exists('cp'):
+        #     os.mkdir('cp')
+
+        if isinstance(frag_ids, int):
+            frag_ids = [frag_ids]
+        if isinstance(ghost_frag_ids, int):
+            ghost_frag_ids = [ghost_frag_ids]
+
+        chrg = 0
+        spin = 0
+        atoms = []
+        ghost_atoms = []
+        for val in frag_ids:
+            chrg += fragList[val]["chrg"]
+            spin += fragList[val]["mult"] - 1
+            for atm in fragList[val]["ids"]:
+                atoms.append(atmList[atm])
+        for val in ghost_frag_ids:
+            for atm in fragList[val]["ids"]:
+                ghost_atoms.append(atmList[atm])
+
+        mult = spin + 1
+        name = jsonfile.replace(".json", f"-{','.join(str(x) for x in frag_ids)}@{','.join(str(x) for x in ghost_frag_ids)}-cp")
+        psi4CalcFromAtoms(f"{name}.inp", chrg, mult, atoms, ghost_atoms, mem=46)
+        psi4GadiJobNormalTemplate(name)
+
+    # dimer CP
+    if lattice:
+        for i in range(len(fragList)-1):
+            psi4CalcFromIds(fragList, atmList, i, center_ip_id)
+            psi4CalcFromIds(fragList, atmList, center_ip_id, i)
+    else:
+        for i in range(len(fragList)-1):
+            for j in range(i+1, len(fragList)):
+                psi4CalcFromIds(fragList, atmList, i, j)
+                psi4CalcFromIds(fragList, atmList, j, i)
+
+    # trimer CP w/ central mon and within 6Å
+    cutoff = 6
+    if lattice:
+        for i in range(len(fragList) - 1):
+            print(center_ip_id, fragList[i]["dist"])
+            if fragList[i]["dist"] < 6 and not i == center_ip_id:
+                for j in range(i + 1, len(fragList)):
+                    print(center_ip_id, fragList[i]["dist"], fragList[j]["dist"])
+                    if fragList[j]["dist"] < 6 and not j == center_ip_id:
+                        psi4CalcFromIds(fragList, atmList, center_ip_id, [i, j])
+                        psi4CalcFromIds(fragList, atmList, i, [j, center_ip_id])
+                        psi4CalcFromIds(fragList, atmList, j, [i, center_ip_id])
+                        psi4CalcFromIds(fragList, atmList, [center_ip_id, i], [j])
+                        psi4CalcFromIds(fragList, atmList, [center_ip_id, j], [i])
+                        psi4CalcFromIds(fragList, atmList, [i, j], [center_ip_id])
+
+    # trimer CP full fmo within 6Å
+    else:
+        for i in range(len(fragList) - 2):
+            if fragList[i]["dist"] < 6:
+                for j in range(i + 1, len(fragList) - 1):
+                    if fragList[j]["dist"] < 6:
+                        for k in range(j + 1, len(fragList)):
+                            if fragList[k]["dist"] < 6:
+                                psi4CalcFromIds(fragList, atmList, k, [i, j])
+                                psi4CalcFromIds(fragList, atmList, i, [j, k])
+                                psi4CalcFromIds(fragList, atmList, j, [i, k])
+                                psi4CalcFromIds(fragList, atmList, [i, k], [j])
+                                psi4CalcFromIds(fragList, atmList, [j, k], [i])
+                                psi4CalcFromIds(fragList, atmList, [i, j], [k])
+
+
+def psi4CalcFromAtoms(name, chrg, mult, atoms, ghost_atoms=(), mem=46):
+
+    xyz_lines = ""
+    for atm in atoms:
+        xyz_lines += f" {atm['sym']} {atm['x']} {atm['y']} {atm['z']}\n"
+    for atm in ghost_atoms:
+        xyz_lines += f" @{atm['sym']} {atm['x']} {atm['y']} {atm['z']}\n"
+
+    psi4Template(name, chrg, mult, xyz_lines, mem=mem)
+
+
 ### TOP LEVEL --------------------------------------------------------
 
 def make_dimer_trimer_tetramer_calcs(jsonfile, method="RIMP2", num_json_dimers=50, num_json_trimers=30,
@@ -1774,7 +1988,7 @@ def make_dimer_trimer_tetramer_calcs(jsonfile, method="RIMP2", num_json_dimers=5
     json_data = read_json(jsonfile)
 
     # CONVERT JSON TO FRAG DATA
-    fragList, atmList, totChrg, totMult, mbe, lattice, level = json_to_frags(json_data)
+    fragList, atmList, totChrg, totMult, mbe, lattice, level, central_ip_id = json_to_frags(json_data)
 
     # ADD CENTROID - USED FOR CENTRAL IP
     fragList = add_centroids(fragList, atmList)
@@ -1784,8 +1998,9 @@ def make_dimer_trimer_tetramer_calcs(jsonfile, method="RIMP2", num_json_dimers=5
     p.print_("midpoint", (mx, my, mz))
 
     # GET CENTRAL IP
-    center_ip_id = central_frag(fragList, mx, my, mz)
-    p.print_("center_ip_id", center_ip_id)
+    if central_ip_id is None:
+        center_ip_id = central_frag(fragList, mx, my, mz)
+        p.print_("center_ip_id", center_ip_id)
 
     # ADD DIST FROM CENTRAL IP
     fragList = add_dist_from_central_ip(fragList, center_ip_id)
@@ -1827,7 +2042,7 @@ def df_from_logs(
     json_data = read_json(jsonfile)
 
     # CONVERT JSON TO FRAG DATA
-    fragList, atmList, totChrg, totMult, mbe, lattice, level = json_to_frags(json_data)
+    fragList, atmList, totChrg, totMult, mbe, lattice, level, center_ip_id = json_to_frags(json_data)
     p.print_("mbe", mbe)
     p.print_("latice", lattice)
 
@@ -1843,15 +2058,13 @@ def df_from_logs(
     p.print_("Midpoint", (mx, my, mz))
 
     # GET CENTRAL IP
-    center_ip_id = central_frag(fragList, mx, my, mz)
-    # read central frag from json if lattice
-    if lattice:
-        center_ip_id = json_data["keywords"]["frag"]["reference_monomer"]
-    if os.path.exists("central_ip_id"):
-        center_ip_id = int(open("central_ip_id", 'r').read().strip())
-        print("Central ion pair from file", center_ip_id)
-    else:
-        print("Central ion pair in the middle of the cluster is", center_ip_id)
+    if center_ip_id is None:
+        if os.path.exists("central_ip_id"):
+            center_ip_id = int(open("central_ip_id", 'r').read().strip())
+            print("Central ion pair from file", center_ip_id)
+        else:
+            center_ip_id = central_frag(fragList, mx, my, mz)
+            print("Central ion pair in the middle of the cluster is", center_ip_id)
 
     # ADD DISTANCE FROM CENTRAL FRAG
     fragList = add_dist_from_central_ip(fragList, center_ip_id)
@@ -1875,10 +2088,10 @@ def df_from_logs(
 
         # find any frags rerun and override energies
         p.print_("Adding rerun frags")
-        monomers, dimers, trimers, tetramers = addInRerunFrags(monomers, dimers, trimers, tetramers)
+        monomers, dimers, trimers, tetramers = addInRerunFrags(monomers, dimers, trimers, tetramers, contributions=True)
 
         # find any correlation nan's which are an error
-        checkHdf5CorrelationNan({**monomers, **dimers, **trimers, **tetramers}, fragList, atmList, jsonfile)
+        checkCorrelationNan({**monomers, **dimers, **trimers, **tetramers}, fragList, atmList, jsonfile)
 
         # write info and files for large energies
         p.print_("Writing outliers")
@@ -1910,7 +2123,7 @@ def df_from_logs(
         monomers, dimers, trimers, tetramers = addInRerunFrags(monomers, dimers, trimers, tetramers)
 
         # find any correlation nan's which are an error
-        checkHdf5CorrelationNan({**monomers, **dimers, **trimers, **tetramers}, fragList, atmList, jsonfile)
+        checkCorrelationNan({**monomers, **dimers, **trimers, **tetramers}, fragList, atmList, jsonfile)
 
         # write info and files for large energies
         p.print_("Writing outliers")
@@ -2012,7 +2225,7 @@ def make_smaller_shell_from_json(json_, cutoff):
     json_data = read_json(json_)
 
     # CONVERT JSON TO FRAG DATA
-    fragList, atmList, totChrg, totMult, mbe, lattice, level = json_to_frags(json_data)
+    fragList, atmList, totChrg, totMult, mbe, lattice, level, center_ip_id = json_to_frags(json_data)
 
     # CHECK IS MBE
     if not mbe:
@@ -2025,7 +2238,8 @@ def make_smaller_shell_from_json(json_, cutoff):
     mx, my, mz = coords_midpoint(atmList)
 
     # GET CENTRAL IP
-    center_ip_id = central_frag(fragList, mx, my, mz)
+    if center_ip_id is None:
+        center_ip_id = central_frag(fragList, mx, my, mz)
 
     # ADD DIST FROM CENTRAL IP
     fragList = add_dist_from_central_ip(fragList, center_ip_id)
@@ -2052,7 +2266,7 @@ def geometryFromFragIds(json_, id_list, newDir=None):
     json_data = read_json(json_)
 
     # CONVERT JSON TO FRAG DATA
-    fragList, atmList, totChrg, totMult, mbe, lattice, level = json_to_frags(json_data)
+    fragList, atmList, totChrg, totMult, mbe, lattice, level, center_ip_id = json_to_frags(json_data)
 
     # CHECK IS MBE
     if not mbe:
@@ -2179,7 +2393,7 @@ def run(value, filename):
             json_data = read_json(filename)
 
             # CONVERT JSON TO FRAG DATA
-            _, atmList, _, _, _, _, _ = json_to_frags(json_data)
+            _, atmList, _, _, _, _, _, _ = json_to_frags(json_data)
 
             # WRITE XYZ
             xyzfile = filename.replace(".json", ".xyz")
@@ -2314,6 +2528,20 @@ def run(value, filename):
             method=method
         )
 
+    # bsse from json lattice - only central monomer
+    elif value == "8":
+        if not filename:
+            filename = glob.glob("*json")[0]
+        print(f"File used: {filename}")
+        bsseCentralMon(filename)
+
+    # bsse from json each mon w/ all other mons as ghost
+    elif value == "9":
+        if not filename:
+            filename = glob.glob("*json")[0]
+        print(f"File used: {filename}")
+        bsseFromJson(filename)
+
 
 # CALL SCRIPT -------------------------------------------
 
@@ -2325,11 +2553,13 @@ print("    4. Make job from json files")
 print("    5. Make smaller shell from json")
 print("    6. Get geometry from frag list")
 print("    7. Make separate dimer/trimer/tetramer calculations")
+print("    8. Central monomer BSSE from json")
+print("    9. BSSE from json")
 print("    0. Quit")
 
 user = None
 filename = None
-while not user in ["1", "2", "3", "4", "5", "6", "7", "0", '']:
+while not user in ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", '']:
 
     if len(sys.argv) > 1:
         filename = sys.argv[1]
