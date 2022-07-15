@@ -1922,8 +1922,9 @@ def bsseFromJson(jsonfile):
     # dimer CP
     if lattice:
         for i in range(len(fragList)-1):
-            psi4CalcFromIds(fragList, atmList, i, center_ip_id)
-            psi4CalcFromIds(fragList, atmList, center_ip_id, i)
+            if not i == center_ip_id:
+                psi4CalcFromIds(fragList, atmList, i, center_ip_id)
+                psi4CalcFromIds(fragList, atmList, center_ip_id, i)
     else:
         for i in range(len(fragList)-1):
             for j in range(i+1, len(fragList)):
@@ -1931,14 +1932,15 @@ def bsseFromJson(jsonfile):
                 psi4CalcFromIds(fragList, atmList, j, i)
 
     # trimer CP w/ central mon and within 6Å
-    cutoff = 6
+    cutoff = 10
     if lattice:
         for i in range(len(fragList) - 1):
-            print(center_ip_id, fragList[i]["dist"])
-            if fragList[i]["dist"] < 6 and not i == center_ip_id:
+            print(type(center_ip_id))
+            # print(center_ip_id, fragList[i]["dist"])
+            if fragList[i]["dist"] < cutoff and not i == center_ip_id:
                 for j in range(i + 1, len(fragList)):
                     print(center_ip_id, fragList[i]["dist"], fragList[j]["dist"])
-                    if fragList[j]["dist"] < 6 and not j == center_ip_id:
+                    if fragList[j]["dist"] < cutoff and not j == center_ip_id:
                         psi4CalcFromIds(fragList, atmList, center_ip_id, [i, j])
                         psi4CalcFromIds(fragList, atmList, i, [j, center_ip_id])
                         psi4CalcFromIds(fragList, atmList, j, [i, center_ip_id])
