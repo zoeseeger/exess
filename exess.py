@@ -1845,37 +1845,37 @@ psi4 -n $PBS_NCPUS {inputname}.inp {inputname}.log"""
         w.write(lines)
 
 
-def bsseCentralMon(jsonfile):
-    """Make central monomer BSSE calcs from json file."""
-
-    # READ JSON
-    json_data = read_json(jsonfile)
-
-    # CONVERT JSON TO FRAG DATA
-    fragList, atmList, totChrg, totMult, mbe, lattice, level, center_ip_id = json_to_frags(json_data)
-
-    if center_ip_id is None:
-        sys.exit("Expected ref monomer in json. exiting . . .")
-
-    atoms = []
-    ghost_atoms = []
-    for frag in fragList:
-        if frag["grp"] == center_ip_id:
-            chrg = frag["chrg"]
-            mult = frag["mult"]
-            for atm in frag["ids"]:
-                atoms.append(atmList[atm])
-        else:
-            for atm in frag["ids"]:
-                ghost_atoms.append(atmList[atm])
-
-    name = jsonfile.replace(".json", "-central-mon-cp")
-    psi4CalcFromAtoms(f"{name}.inp", chrg, mult, atoms, ghost_atoms, mem=1468)
-    psi4GadiJobHugememTemplate(name)
-
-    name = jsonfile.replace(".json", "-central-mon")
-    psi4CalcFromAtoms(f"{name}.inp", chrg, mult, atoms, mem=46)
-    psi4GadiJobNormalTemplate(name)
+# def bsseCentralMon(jsonfile):
+#     """Make central monomer BSSE calcs from json file."""
+#
+#     # READ JSON
+#     json_data = read_json(jsonfile)
+#
+#     # CONVERT JSON TO FRAG DATA
+#     fragList, atmList, totChrg, totMult, mbe, lattice, level, center_ip_id = json_to_frags(json_data)
+#
+#     if center_ip_id is None:
+#         sys.exit("Expected ref monomer in json. exiting . . .")
+#
+#     atoms = []
+#     ghost_atoms = []
+#     for frag in fragList:
+#         if frag["grp"] == center_ip_id:
+#             chrg = frag["chrg"]
+#             mult = frag["mult"]
+#             for atm in frag["ids"]:
+#                 atoms.append(atmList[atm])
+#         else:
+#             for atm in frag["ids"]:
+#                 ghost_atoms.append(atmList[atm])
+#
+#     name = jsonfile.replace(".json", "-central-mon-cp")
+#     psi4CalcFromAtoms(f"{name}.inp", chrg, mult, atoms, ghost_atoms, mem=1468)
+#     psi4GadiJobHugememTemplate(name)
+#
+#     name = jsonfile.replace(".json", "-central-mon")
+#     psi4CalcFromAtoms(f"{name}.inp", chrg, mult, atoms, mem=46)
+#     psi4GadiJobNormalTemplate(name)
 
 
 def bsseFromJson(jsonfile):
@@ -1891,10 +1891,9 @@ def bsseFromJson(jsonfile):
 
     fragList = add_dist_from_central_ip(fragList, center_ip_id)
 
-    def psi4CalcFromIds(fragList, atmList, frag_ids=(), ghost_frag_ids=()):
+    print(fragList)
 
-        # if not os.path.exists('cp'):
-        #     os.mkdir('cp')
+    def psi4CalcFromIds(fragList, atmList, frag_ids=(), ghost_frag_ids=()):
 
         if isinstance(frag_ids, int):
             frag_ids = [frag_ids]
@@ -1924,7 +1923,7 @@ def bsseFromJson(jsonfile):
 
     # dimer CP
     if lattice:
-        for i in range(len(fragList)-1):
+        for i in range(len(fragList)):
             if not i == center_ip_id:
                 psi4CalcFromIds(fragList, atmList, i)
                 psi4CalcFromIds(fragList, atmList, center_ip_id)
@@ -1944,7 +1943,6 @@ def bsseFromJson(jsonfile):
         for i in range(len(fragList) - 1):
             if fragList[i]["dist"] < cutoff and not i == center_ip_id:
                 for j in range(i + 1, len(fragList)):
-                    print(center_ip_id, fragList[i]["dist"], fragList[j]["dist"])
                     if fragList[j]["dist"] < cutoff and not j == center_ip_id:
                         psi4CalcFromIds(fragList, atmList, [i, j])
                         psi4CalcFromIds(fragList, atmList, [center_ip_id, j])
@@ -2541,15 +2539,8 @@ def run(value, filename):
             method=method
         )
 
-    # bsse from json lattice - only central monomer
-    elif value == "8":
-        if not filename:
-            filename = glob.glob("*json")[0]
-        print(f"File used: {filename}")
-        bsseCentralMon(filename)
-
     # bsse from json each mon w/ all other mons as ghost
-    elif value == "9":
+    elif value == "8":
         if not filename:
             filename = glob.glob("*json")[0]
         print(f"File used: {filename}")
@@ -2566,8 +2557,7 @@ print("    4. Make job from json files")
 print("    5. Make smaller shell from json")
 print("    6. Get geometry from frag list")
 print("    7. Make separate dimer/trimer/tetramer calculations")
-print("    8. Central monomer BSSE from json")
-print("    9. BSSE from json")
+print("    8. BSSE from json")
 print("    0. Quit")
 
 user = None
