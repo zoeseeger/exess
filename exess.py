@@ -40,7 +40,7 @@ def chunk(list_, n):
         yield list_[i:i + n]
 
 
-def eof(path, file, perc):
+def endOfFile(path, file, perc):
     """Return percentage end of file as list of lines."""
 
     # OPEN IN BYTES
@@ -1053,7 +1053,7 @@ def energies_from_mbe_log(filename):
 
     dir, File = os.path.split(filename)
     dir = dir or "."
-    lines = eof(dir + '/', File, 0.15)
+    lines = endOfFile(dir + '/', File, 0.15)
 
     for line in lines:
 
@@ -1172,7 +1172,7 @@ def energies_from_log(filename):
 
     hf, hf2, os_, ss_ = None, None, None, None
     dir, File = os.path.split(filename)
-    lines = eof(dir + '/', File, 0.15)
+    lines = endOfFile(dir + '/', File, 0.15)
     for line in lines:
         if "Final E(HF)" in line:  # MP2
             hf = line.split()[3]
@@ -1430,7 +1430,7 @@ def check_all_completed(logfiles):
 
     for log in logfiles:
         success = False
-        lines = eof('', log, 1)
+        lines = endOfFile('', log, 1)
         for line in lines:
             if "Thanks for using EXESS!" in line:  # MP2
                 success = True
@@ -1915,7 +1915,10 @@ def bsseFromJson(jsonfile):
                 ghost_atoms.append(atmList[atm])
 
         mult = spin + 1
-        name = jsonfile.replace(".json", f"-{','.join(str(x) for x in frag_ids)}@{','.join(str(x) for x in ghost_frag_ids)}-cp")
+        if ghost_frag_ids:
+            name = jsonfile.replace(".json", f"-NML-{'-'.join(str(x) for x in frag_ids)}-GH-{'-'.join(str(x) for x in ghost_frag_ids)}-cp")
+        else:
+            name = jsonfile.replace(".json", f"-NML-{'-'.join(str(x) for x in frag_ids)}-cp")
         psi4CalcFromAtoms(f"{name}.inp", chrg, mult, atoms, ghost_atoms, mem=46)
         psi4GadiJobNormalTemplate(name)
 
@@ -1923,24 +1926,29 @@ def bsseFromJson(jsonfile):
     if lattice:
         for i in range(len(fragList)-1):
             if not i == center_ip_id:
+                psi4CalcFromIds(fragList, atmList, i)
+                psi4CalcFromIds(fragList, atmList, center_ip_id)
                 psi4CalcFromIds(fragList, atmList, i, center_ip_id)
                 psi4CalcFromIds(fragList, atmList, center_ip_id, i)
     else:
         for i in range(len(fragList)-1):
             for j in range(i+1, len(fragList)):
+                psi4CalcFromIds(fragList, atmList, i)
+                psi4CalcFromIds(fragList, atmList, j)
                 psi4CalcFromIds(fragList, atmList, i, j)
                 psi4CalcFromIds(fragList, atmList, j, i)
 
     # trimer CP w/ central mon and within 6Å
-    cutoff = 10
+    cutoff = 8
     if lattice:
         for i in range(len(fragList) - 1):
-            print(type(center_ip_id))
-            # print(center_ip_id, fragList[i]["dist"])
             if fragList[i]["dist"] < cutoff and not i == center_ip_id:
                 for j in range(i + 1, len(fragList)):
                     print(center_ip_id, fragList[i]["dist"], fragList[j]["dist"])
                     if fragList[j]["dist"] < cutoff and not j == center_ip_id:
+                        psi4CalcFromIds(fragList, atmList, [i, j])
+                        psi4CalcFromIds(fragList, atmList, [center_ip_id, j])
+                        psi4CalcFromIds(fragList, atmList, [i, center_ip_id])
                         psi4CalcFromIds(fragList, atmList, center_ip_id, [i, j])
                         psi4CalcFromIds(fragList, atmList, i, [j, center_ip_id])
                         psi4CalcFromIds(fragList, atmList, j, [i, center_ip_id])
@@ -1956,6 +1964,9 @@ def bsseFromJson(jsonfile):
                     if fragList[j]["dist"] < 6:
                         for k in range(j + 1, len(fragList)):
                             if fragList[k]["dist"] < 6:
+                                psi4CalcFromIds(fragList, atmList, [i, j])
+                                psi4CalcFromIds(fragList, atmList, [i, k])
+                                psi4CalcFromIds(fragList, atmList, [j, k])
                                 psi4CalcFromIds(fragList, atmList, k, [i, j])
                                 psi4CalcFromIds(fragList, atmList, i, [j, k])
                                 psi4CalcFromIds(fragList, atmList, j, [i, k])
