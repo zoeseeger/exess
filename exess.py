@@ -207,6 +207,7 @@ angstrom2bohr = 1.88973
 hartree2kjmol = 2625.4996
 osvdz2srs = 1.752
 osvtz2srs = 1.64
+bsse_cutoff = 100
 
 
 def midpoint(list_):
@@ -1053,9 +1054,13 @@ def energies_from_mbe_log(filename):
 
     dir, File = os.path.split(filename)
     dir = dir or "."
-    lines = endOfFile(dir + '/', File, 0.15)
-
+    lines = endOfFile(dir + '/', File, 0.25)
+    print(lines[1])
     for line in lines:
+
+        # if "1     9699" in line:
+        #     print(mons, dims, tris, tets, len(line.split()))
+        #     print(line)
 
         if not line.strip():
             continue
@@ -1196,7 +1201,7 @@ def energies_from_log(filename):
 
 
 def distance_energy_df(dimer_dists, center_ip_id, monomers, dimers, trimers=None, tetramers=None, trimer_dists=None,
-                       tetramer_dists=None, kjmol=True):
+                       tetramer_dists=None, kjmol=True, lattice=True):
     """Energies as the radius is increased from the central frag."""
 
     if kjmol:
@@ -1213,7 +1218,7 @@ def distance_energy_df(dimer_dists, center_ip_id, monomers, dimers, trimers=None
     elif basis == 'vtz':
         os_coef = osvtz2srs
 
-    dists_list, ids_list, r1, r2, r3, r4, r5, r6, rmax = [], [], [], [], [], [], [], [], []
+    dists_list, ids_list, r1, r2, r3, r4, r5, r6, rmax, bsse = [], [], [], [], [], [], [], [], [], []
     tot_frag, mp2_frag, srs_frag, hf_frag, type_frag, central = [], [], [], [], [], []
 
     # monomers
@@ -1227,6 +1232,7 @@ def distance_energy_df(dimer_dists, center_ip_id, monomers, dimers, trimers=None
         r5.append(np.nan)
         r6.append(np.nan)
         rmax.append(np.nan)
+        bsse.append(np.nan)
         hf_frag.append(dict_['hf'] * conversion)
         mp2_frag.append((dict_['os'] + dict_['ss']) * conversion)
         srs_frag.append(dict_['os'] * os_coef * conversion)
@@ -1258,12 +1264,20 @@ def distance_energy_df(dimer_dists, center_ip_id, monomers, dimers, trimers=None
             r6.append(r6_)
             rmax.append(rm)
             ids_list.append(key)
-
+            if os.path.exists("../bsse"):
+                # only did trimers within 8Å radius
+                if (typ == "trimer" and rm > bsse_cutoff) or typ == "tetramer":
+                    bsse.append(np.nan)
+                else:
+                    bsse_ = getBSSEFrag(key, lattice, central_ip_id) / num_frags * conversion
+                    bsse.append(bsse_)
+            else:
+                bsse.append(np.nan)
             # get hf
             try:
                 hf = e_dict[key]['hf']
             except:
-                print(e_dict)
+                # print(e_dict)
                 # hf = np.nan
                 print(f"!!!Frag {key} HF not found with ave distance {d}!!!")
                 sys.exit()
@@ -1271,15 +1285,15 @@ def distance_energy_df(dimer_dists, center_ip_id, monomers, dimers, trimers=None
             hf = hf / num_frags * conversion
 
             # get corr
-            os = e_dict.get(key, {}).get('os')
+            os_ = e_dict.get(key, {}).get('os')
             ss = e_dict.get(key, {}).get('ss')
-            if not os:
-                os = np.nan
+            if not os_:
+                os_ = np.nan
                 ss = np.nan
                 # print(f"!!!Frag {key} OS not found with ave distance {d}!!!")
                 # sys.exit()
-            mp2 = (os + ss) / num_frags * conversion
-            srs = os / num_frags * os_coef * conversion
+            mp2 = (os_ + ss) / num_frags * conversion
+            srs = os_ / num_frags * os_coef * conversion
 
             # add hf to cor if calculated for this frag
             if np.isnan(srs):
@@ -1325,6 +1339,7 @@ def distance_energy_df(dimer_dists, center_ip_id, monomers, dimers, trimers=None
         'r5': r5,
         'r6': r6,
         'rmax': rmax,
+        'hf_bsse': bsse,
     }
 
     return data
@@ -1644,7 +1659,7 @@ def checkCorrelationNan(frags_dict, fragList, atmList, jsonfile):
             w.write(lines)
 
 
-def outlierEnergies(dimers, trimers, tetramers, fragList, atmList, json_, write_outliers=False):
+def outlierEnergies(dimers, trimers, tetramers, fragList, atmList, json_, write_outliers=True):
     """Check for very large hf and cor energies."""
 
     def getZScore(energies, keys, typ_frag, typ_e, threshold=50):
@@ -1760,6 +1775,61 @@ def addInRerunFrags(monomers, dimers, trimers, tetramers, contributions=False):
     return monomers, dimers, trimers, tetramers
 
 
+def getBSSEFrag(key, lattice, center_ip_id):
+    """Read in separate PSI4 CP calcs and return the BSSE for a dimer or trimer."""
+
+    mons = key.split('-')
+
+    # dimer
+    if len(mons) == 2:
+        if lattice:
+            mons.remove(str(center_ip_id))
+            a_ = mons[0]
+            b_ = center_ip_id
+        else:
+            a_ = mons[0]
+            b_ = mons[1]
+
+        a = scf_energy_from_psi4(f"../bsse/sphere-NML-{a_}-cp.log")
+        b = scf_energy_from_psi4(f"../bsse/sphere-NML-{b_}-cp.log")
+        a_ab = scf_energy_from_psi4(f"../bsse/sphere-NML-{a_}-GH-{b_}-cp.log")
+        b_ab = scf_energy_from_psi4(f"../bsse/sphere-NML-{b_}-GH-{a_}-cp.log")
+        return a + b - a_ab - b_ab
+
+    # trimer
+    elif len(mons) == 3:
+        if lattice:
+            mons.remove(str(center_ip_id))
+            a_ = mons[0]
+            b_ = mons[1]
+            c_ = center_ip_id
+
+        else:
+            a_ = mons[0]
+            b_ = mons[1]
+            c_ = mons[2]
+
+        a = scf_energy_from_psi4(f"../bsse/sphere-NML-{a_}-cp.log")
+        b = scf_energy_from_psi4(f"../bsse/sphere-NML-{b_}-cp.log")
+        c = scf_energy_from_psi4(f"../bsse/sphere-NML-{c_}-cp.log")
+        a_abc = scf_energy_from_psi4(f"../bsse/sphere-NML-{a_}-GH-{b_}-{c_}-cp.log")
+        b_abc = scf_energy_from_psi4(f"../bsse/sphere-NML-{b_}-GH-{a_}-{c_}-cp.log")
+        c_abc = scf_energy_from_psi4(f"../bsse/sphere-NML-{c_}-GH-{a_}-{b_}-cp.log")
+        ab = scf_energy_from_psi4(f"../bsse/sphere-NML-{a_}-{b_}-cp.log")
+        ac = scf_energy_from_psi4(f"../bsse/sphere-NML-{a_}-{c_}-cp.log")
+        if lattice:
+            bc = scf_energy_from_psi4(f"../bsse/sphere-NML-{c_}-{b_}-cp.log")
+        else:
+            bc = scf_energy_from_psi4(f"../bsse/sphere-NML-{b_}-{c_}-cp.log")
+        ab_abc = scf_energy_from_psi4(f"../bsse/sphere-NML-{a_}-{b_}-GH-{c_}-cp.log")
+        if lattice:
+            ac_abc = scf_energy_from_psi4(f"../bsse/sphere-NML-{c_}-{a_}-GH-{b_}-cp.log")
+        else:
+            ac_abc = scf_energy_from_psi4(f"../bsse/sphere-NML-{a_}-{c_}-GH-{b_}-cp.log")
+        bc_abc = scf_energy_from_psi4(f"../bsse/sphere-NML-{b_}-{c_}-GH-{a_}-cp.log")
+        return ab + bc + ac - ab_abc - ac_abc - bc_abc - a - b - c + a_abc + b_abc + c_abc
+
+
 def writeCentralMBE(center_frag_id, fragList, fragList_init, atmList, method, File):
 
     # get initial frag ids which contain atoms of central ip
@@ -1845,6 +1915,25 @@ psi4 -n $PBS_NCPUS {inputname}.inp {inputname}.log"""
         w.write(lines)
 
 
+def scf_energy_from_psi4(filename):
+    """SCF energy from psi4 log file."""
+
+    e = None
+    dir, File = os.path.split(filename)
+    dir = dir or "."
+    lines = endOfFile(dir + '/', File, 0.8)
+
+    for line in lines:
+        # use last occurence
+        if "    Total Energy =" in line:
+            e = float(line.split()[3])
+
+    if not e:
+        print(f"Could not get energy from {filename}")
+        return np.nan
+    return e
+
+
 # def bsseCentralMon(jsonfile):
 #     """Make central monomer BSSE calcs from json file."""
 #
@@ -1891,8 +1980,6 @@ def bsseFromJson(jsonfile):
 
     fragList = add_dist_from_central_ip(fragList, center_ip_id)
 
-    print(fragList)
-
     def psi4CalcFromIds(fragList, atmList, frag_ids=(), ghost_frag_ids=()):
 
         if isinstance(frag_ids, int):
@@ -1938,12 +2025,11 @@ def bsseFromJson(jsonfile):
                 psi4CalcFromIds(fragList, atmList, j, i)
 
     # trimer CP w/ central mon and within 6Å
-    cutoff = 8
     if lattice:
         for i in range(len(fragList) - 1):
-            if fragList[i]["dist"] < cutoff and not i == center_ip_id:
+            if fragList[i]["dist"] < bsse_cutoff and not i == center_ip_id:
                 for j in range(i + 1, len(fragList)):
-                    if fragList[j]["dist"] < cutoff and not j == center_ip_id:
+                    if fragList[j]["dist"] < bsse_cutoff and not j == center_ip_id:
                         psi4CalcFromIds(fragList, atmList, [i, j])
                         psi4CalcFromIds(fragList, atmList, [center_ip_id, j])
                         psi4CalcFromIds(fragList, atmList, [i, center_ip_id])
@@ -1957,11 +2043,11 @@ def bsseFromJson(jsonfile):
     # trimer CP full fmo within 6Å
     else:
         for i in range(len(fragList) - 2):
-            if fragList[i]["dist"] < 6:
+            if fragList[i]["dist"] < bsse_cutoff:
                 for j in range(i + 1, len(fragList) - 1):
-                    if fragList[j]["dist"] < 6:
+                    if fragList[j]["dist"] < bsse_cutoff:
                         for k in range(j + 1, len(fragList)):
-                            if fragList[k]["dist"] < 6:
+                            if fragList[k]["dist"] < bsse_cutoff:
                                 psi4CalcFromIds(fragList, atmList, [i, j])
                                 psi4CalcFromIds(fragList, atmList, [i, k])
                                 psi4CalcFromIds(fragList, atmList, [j, k])
@@ -2204,7 +2290,7 @@ def df_from_logs(
     p.print_("Compiling data and making dataframe")
 
     df_data = distance_energy_df(dimers_dists, center_ip_id, monomers, dimers, trimers, tetramers, trimers_dists,
-                                 tetramer_dists)
+                                 tetramer_dists, lattice=lattice)
     df = pd.DataFrame(df_data)
     p.print_("df_data.keys()", df_data.keys())
     p.print_("df_data", df_data, still_print=False)
